@@ -1,0 +1,492 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-speedometer2 me-2"></i>Dashboard</h2>
+        <button class="btn btn-outline-primary" onclick="refreshDashboard()">
+            <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+        </button>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2 opacity-75">Total Sessions</h6>
+                            <h2 class="card-title mb-0" id="totalSessions">-</h2>
+                        </div>
+                        <i class="bi bi-journal-text fs-1 opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2 opacity-75">Completed</h6>
+                            <h2 class="card-title mb-0" id="completedSessions">-</h2>
+                        </div>
+                        <i class="bi bi-check-circle fs-1 opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2 opacity-75">Running</h6>
+                            <h2 class="card-title mb-0" id="runningSessions">-</h2>
+                        </div>
+                        <i class="bi bi-hourglass-split fs-1 opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2 opacity-75">Total Results</h6>
+                            <h2 class="card-title mb-0" id="totalResults">-</h2>
+                        </div>
+                        <i class="bi bi-file-earmark-richtext fs-1 opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="row g-4 mb-4">
+        <div class="col-lg-8">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>Research Activity</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="activityChart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-pie-chart me-2"></i>Tool Usage</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="toolUsageChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Health & Active Sessions -->
+    <div class="row g-4 mb-4">
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-heart-pulse me-2"></i>System Health</h5>
+                </div>
+                <div class="card-body">
+                    <div id="healthStatus">
+                        <div class="d-flex justify-content-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-8">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-activity me-2"></i>Active Sessions</h5>
+                    <a href="/research/new" class="btn btn-sm btn-primary">
+                        <i class="bi bi-plus me-1"></i>New
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Objective</th>
+                                    <th>Status</th>
+                                    <th>Progress</th>
+                                    <th>Started</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="activeSessionsTable">
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-4">
+                                        No active sessions
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- API Metrics -->
+    <div class="row g-4 mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-speedometer me-2"></i>API Performance</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <div class="col-md-4">
+                            <div class="border rounded p-3">
+                                <h6 class="text-muted mb-2">PubMed API</h6>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Avg Latency:</span>
+                                    <span id="pubmedLatency">-</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Success Rate:</span>
+                                    <span id="pubmedSuccess">-</span>
+                                </div>
+                                <div class="progress" style="height: 8px;">
+                                    <div class="progress-bar bg-success" id="pubmedProgressBar" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="border rounded p-3">
+                                <h6 class="text-muted mb-2">MyGene API</h6>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Avg Latency:</span>
+                                    <span id="mygeneLatency">-</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Success Rate:</span>
+                                    <span id="mygeneSuccess">-</span>
+                                </div>
+                                <div class="progress" style="height: 8px;">
+                                    <div class="progress-bar bg-success" id="mygeneProgressBar" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="border rounded p-3">
+                                <h6 class="text-muted mb-2">MyVariant API</h6>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Avg Latency:</span>
+                                    <span id="myvariantLatency">-</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Success Rate:</span>
+                                    <span id="myvariantSuccess">-</span>
+                                </div>
+                                <div class="progress" style="height: 8px;">
+                                    <div class="progress-bar bg-success" id="myvariantProgressBar" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Completed -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Recent Completed</h5>
+                    <a href="/history" class="btn btn-sm btn-outline-primary">View All</a>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3" id="recentCompletedList">
+                        <div class="col-12 text-center text-muted py-4">
+                            Loading...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let activityChart = null;
+let toolUsageChart = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    initCharts();
+    refreshDashboard();
+
+    // Auto-refresh every 30 seconds
+    setInterval(refreshDashboard, 30000);
+});
+
+function initCharts() {
+    // Activity Chart
+    const activityCtx = document.getElementById('activityChart').getContext('2d');
+    activityChart = new Chart(activityCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Sessions',
+                data: [],
+                borderColor: 'rgb(75, 192, 192)',
+                tension: 0.1,
+                fill: true,
+                backgroundColor: 'rgba(75, 192, 192, 0.1)'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+
+    // Tool Usage Chart
+    const toolCtx = document.getElementById('toolUsageChart').getContext('2d');
+    toolUsageChart = new Chart(toolCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['PubMed', 'MyGene', 'MyVariant'],
+            datasets: [{
+                data: [0, 0, 0],
+                backgroundColor: [
+                    'rgb(54, 162, 235)',
+                    'rgb(75, 192, 192)',
+                    'rgb(255, 205, 86)'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' }
+            }
+        }
+    });
+}
+
+async function refreshDashboard() {
+    await Promise.all([
+        loadStats(),
+        loadHealthStatus(),
+        loadActiveSessions(),
+        loadRecentCompleted(),
+        loadMetrics()
+    ]);
+}
+
+async function loadStats() {
+    try {
+        const response = await fetch('/api/admin/stats', {
+            headers: getAuthHeaders()
+        });
+
+        if (response.ok) {
+            const stats = await response.json();
+            document.getElementById('totalSessions').textContent = stats.total_sessions || 0;
+            document.getElementById('completedSessions').textContent = stats.completed_sessions || 0;
+            document.getElementById('runningSessions').textContent = stats.running_sessions || 0;
+            document.getElementById('totalResults').textContent = stats.total_results || 0;
+
+            // Update activity chart
+            if (stats.activity_data) {
+                activityChart.data.labels = stats.activity_data.labels || [];
+                activityChart.data.datasets[0].data = stats.activity_data.values || [];
+                activityChart.update();
+            }
+
+            // Update tool usage chart
+            if (stats.tool_usage) {
+                toolUsageChart.data.datasets[0].data = [
+                    stats.tool_usage.pubmed || 0,
+                    stats.tool_usage.mygene || 0,
+                    stats.tool_usage.myvariant || 0
+                ];
+                toolUsageChart.update();
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load stats:', error);
+    }
+}
+
+async function loadHealthStatus() {
+    try {
+        const response = await fetch('/api/health');
+        const health = await response.json();
+
+        const healthDiv = document.getElementById('healthStatus');
+        healthDiv.innerHTML = `
+            <div class="list-group list-group-flush">
+                <div class="list-group-item d-flex justify-content-between align-items-center">
+                    <span>System Status</span>
+                    <span class="badge bg-${health.status === 'healthy' ? 'success' : 'danger'}">
+                        ${health.status}
+                    </span>
+                </div>
+                ${Object.entries(health.services || {}).map(([name, status]) => `
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>${name}</span>
+                        <span class="badge bg-${status === 'ok' ? 'success' : 'danger'}">
+                            ${status}
+                        </span>
+                    </div>
+                `).join('')}
+                <div class="list-group-item d-flex justify-content-between align-items-center">
+                    <span>Last Check</span>
+                    <small class="text-muted">${new Date().toLocaleTimeString()}</small>
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        document.getElementById('healthStatus').innerHTML = `
+            <div class="alert alert-danger mb-0">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                Failed to check health status
+            </div>
+        `;
+    }
+}
+
+async function loadActiveSessions() {
+    try {
+        const response = await fetch('/api/research/history?status=running&limit=10', {
+            headers: getAuthHeaders()
+        });
+
+        if (response.ok) {
+            const sessions = await response.json();
+            const tbody = document.getElementById('activeSessionsTable');
+
+            if (sessions.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="text-center text-muted py-4">
+                            No active sessions
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = sessions.map(session => `
+                <tr>
+                    <td class="text-truncate" style="max-width: 200px;" title="${escapeHtml(session.objective)}">
+                        ${escapeHtml(session.objective)}
+                    </td>
+                    <td><span class="badge bg-${getStatusColor(session.status)}">${session.status}</span></td>
+                    <td>
+                        <div class="progress" style="height: 8px; width: 100px;">
+                            <div class="progress-bar" style="width: ${session.progress || 0}%"></div>
+                        </div>
+                    </td>
+                    <td><small class="text-muted">${formatDate(session.created_at)}</small></td>
+                    <td>
+                        <a href="/research/${session.id}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-eye"></i>
+                        </a>
+                    </td>
+                </tr>
+            `).join('');
+        }
+    } catch (error) {
+        console.error('Failed to load active sessions:', error);
+    }
+}
+
+async function loadRecentCompleted() {
+    try {
+        const response = await fetch('/api/research/history?status=completed&limit=4', {
+            headers: getAuthHeaders()
+        });
+
+        if (response.ok) {
+            const sessions = await response.json();
+            const container = document.getElementById('recentCompletedList');
+
+            if (sessions.length === 0) {
+                container.innerHTML = `
+                    <div class="col-12 text-center text-muted py-4">
+                        No completed research yet
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = sessions.map(session => `
+                <div class="col-md-3">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h6 class="card-title text-truncate" title="${escapeHtml(session.objective)}">
+                                ${escapeHtml(session.objective)}
+                            </h6>
+                            <p class="card-text small">
+                                <span class="text-success"><i class="bi bi-check-circle me-1"></i>Completed</span><br>
+                                <span class="text-muted">${session.results_count || 0} results</span>
+                            </p>
+                            <a href="/research/${session.id}" class="btn btn-sm btn-outline-primary">View Results</a>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+    } catch (error) {
+        console.error('Failed to load recent completed:', error);
+    }
+}
+
+async function loadMetrics() {
+    try {
+        const response = await fetch('/api/metrics', {
+            headers: getAuthHeaders()
+        });
+
+        if (response.ok) {
+            const metrics = await response.json();
+
+            // Update API performance metrics
+            const apis = ['pubmed', 'mygene', 'myvariant'];
+            apis.forEach(api => {
+                const apiMetrics = metrics.api_calls?.[api] || {};
+                document.getElementById(`${api}Latency`).textContent =
+                    apiMetrics.avg_latency ? `${apiMetrics.avg_latency.toFixed(0)}ms` : '-';
+
+                const successRate = apiMetrics.success_rate || 0;
+                document.getElementById(`${api}Success`).textContent = `${(successRate * 100).toFixed(1)}%`;
+                document.getElementById(`${api}ProgressBar`).style.width = `${successRate * 100}%`;
+            });
+        }
+    } catch (error) {
+        console.error('Failed to load metrics:', error);
+    }
+}
+</script>
+{% endblock %}

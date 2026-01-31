@@ -1,0 +1,673 @@
+{% extends "base.html" %}
+
+{% block title %}Research Session{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h2 id="sessionObjective">Loading...</h2>
+                    <div class="text-muted">
+                        <span id="sessionId"></span>
+                        <span class="mx-2">|</span>
+                        <span id="sessionCreated"></span>
+                    </div>
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-outline-primary" id="favoriteBtn" title="Add to favorites">
+                        <i class="bi bi-star"></i>
+                    </button>
+                    <div class="btn-group">
+                        <button class="btn btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
+                            <i class="bi bi-download me-1"></i>Export
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="#" onclick="exportResults('json')"><i class="bi bi-filetype-json me-2"></i>JSON</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="exportResults('csv')"><i class="bi bi-filetype-csv me-2"></i>CSV</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="exportResults('markdown')"><i class="bi bi-markdown me-2"></i>Markdown</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="exportResults('bibtex')"><i class="bi bi-file-earmark-text me-2"></i>BibTeX</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="exportResults('pdf')"><i class="bi bi-filetype-pdf me-2"></i>PDF</a></li>
+                        </ul>
+                    </div>
+                    <button class="btn btn-outline-secondary" onclick="saveAsTemplate()" title="Save as template">
+                        <i class="bi bi-bookmark-plus"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Progress Section (shown when running) -->
+    <div class="row mb-4" id="progressSection">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="fw-bold">
+                            <span class="spinner-border spinner-border-sm me-2" id="progressSpinner"></span>
+                            <span id="progressStatus">Running...</span>
+                        </span>
+                        <span id="progressPercent">0%</span>
+                    </div>
+                    <div class="progress mb-3" style="height: 20px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" id="progressBar"
+                            role="progressbar" style="width: 0%"></div>
+                    </div>
+                    <div class="small text-muted" id="currentTask">
+                        Initializing...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="row">
+        <!-- Left Panel: Tasks & Results -->
+        <div class="col-lg-8">
+            <!-- Executive Summary -->
+            <div class="card mb-4" id="summaryCard" style="display: none;">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-file-text me-2"></i>Executive Summary</h5>
+                </div>
+                <div class="card-body">
+                    <div id="executiveSummary" class="mb-0"></div>
+                </div>
+            </div>
+
+            <!-- Key Findings -->
+            <div class="card mb-4" id="findingsCard" style="display: none;">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-lightbulb me-2"></i>Key Findings</h5>
+                </div>
+                <div class="card-body">
+                    <div id="keyFindings"></div>
+                </div>
+            </div>
+
+            <!-- Task Results -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-list-check me-2"></i>Research Tasks</h5>
+                    <span class="badge bg-primary" id="taskCount">0 tasks</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="accordion" id="tasksAccordion">
+                        <div class="text-center text-muted py-5" id="noTasks">
+                            <i class="bi bi-hourglass-split fs-1 mb-2 d-block"></i>
+                            Waiting for tasks...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Results Feed -->
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-activity me-2"></i>Live Feed</h5>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="toggleLiveFeed()">
+                        <i class="bi bi-pause-fill" id="liveFeedIcon"></i>
+                    </button>
+                </div>
+                <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                    <div id="liveFeed" class="font-monospace small">
+                        <div class="text-muted">Waiting for updates...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Info & Citations -->
+        <div class="col-lg-4">
+            <!-- Session Info -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Session Info</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm mb-0">
+                        <tr>
+                            <th>Status</th>
+                            <td><span class="badge" id="sessionStatus">-</span></td>
+                        </tr>
+                        <tr>
+                            <th>Tools</th>
+                            <td id="sessionTools">-</td>
+                        </tr>
+                        <tr>
+                            <th>Iterations</th>
+                            <td id="sessionIterations">-</td>
+                        </tr>
+                        <tr>
+                            <th>Results</th>
+                            <td id="sessionResultsCount">-</td>
+                        </tr>
+                        <tr>
+                            <th>Duration</th>
+                            <td id="sessionDuration">-</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tools Used -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-tools me-2"></i>Tools Used</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-2" id="toolsUsedGrid">
+                        <div class="col-12 text-center text-muted py-3">
+                            No tools used yet
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Citations -->
+            <div class="card mb-4" id="citationsCard" style="display: none;">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-journal-bookmark me-2"></i>Citations</h5>
+                    <button class="btn btn-sm btn-outline-primary" onclick="exportResults('bibtex')">
+                        <i class="bi bi-download"></i>
+                    </button>
+                </div>
+                <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                    <div id="citationsList"></div>
+                </div>
+            </div>
+
+            <!-- Related Research -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-link-45deg me-2"></i>Related Research</h5>
+                </div>
+                <div class="card-body">
+                    <div id="relatedResearch">
+                        <div class="text-muted small">Loading...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Save as Template Modal -->
+<div class="modal fade" id="templateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Save as Template</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="templateForm">
+                    <div class="mb-3">
+                        <label for="templateName" class="form-label">Template Name</label>
+                        <input type="text" class="form-control" id="templateName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="templateDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="templateDescription" rows="2"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveTemplate()">Save Template</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.live-feed-entry {
+    padding: 0.5rem;
+    border-bottom: 1px solid #eee;
+}
+.live-feed-entry:last-child {
+    border-bottom: none;
+}
+.live-feed-entry.error {
+    background-color: #fff5f5;
+    color: #c53030;
+}
+.live-feed-entry.success {
+    background-color: #f0fff4;
+    color: #276749;
+}
+.citation-item {
+    padding: 0.75rem;
+    border-bottom: 1px solid #eee;
+}
+.citation-item:last-child {
+    border-bottom: none;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const SESSION_ID = window.location.pathname.split('/').pop();
+let websocket = null;
+let liveFeedPaused = false;
+let sessionData = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadSession();
+    connectWebSocket();
+
+    // Favorite button
+    document.getElementById('favoriteBtn').addEventListener('click', toggleFavorite);
+});
+
+async function loadSession() {
+    try {
+        const response = await fetch(`/api/research/${SESSION_ID}`, {
+            headers: getAuthHeaders()
+        });
+
+        if (response.ok) {
+            sessionData = await response.json();
+            updateUI(sessionData);
+        } else {
+            showToast('Failed to load session', 'danger');
+        }
+    } catch (error) {
+        showToast('Error loading session: ' + error.message, 'danger');
+    }
+}
+
+function updateUI(session) {
+    // Header
+    document.getElementById('sessionObjective').textContent = session.objective;
+    document.getElementById('sessionId').textContent = `ID: ${session.id.substring(0, 8)}...`;
+    document.getElementById('sessionCreated').textContent = `Started: ${formatDate(session.created_at)}`;
+
+    // Status badge
+    const statusBadge = document.getElementById('sessionStatus');
+    statusBadge.textContent = session.status;
+    statusBadge.className = `badge bg-${getStatusColor(session.status)}`;
+
+    // Session info
+    document.getElementById('sessionTools').innerHTML = (session.tools || [])
+        .map(t => `<span class="badge bg-secondary me-1">${t}</span>`)
+        .join('');
+    document.getElementById('sessionIterations').textContent = session.max_iterations || '-';
+    document.getElementById('sessionResultsCount').textContent = session.results_count || 0;
+
+    // Duration
+    if (session.created_at) {
+        const start = new Date(session.created_at);
+        const end = session.completed_at ? new Date(session.completed_at) : new Date();
+        const duration = Math.round((end - start) / 1000);
+        document.getElementById('sessionDuration').textContent = formatDuration(duration);
+    }
+
+    // Progress section
+    const progressSection = document.getElementById('progressSection');
+    if (session.status === 'running' || session.status === 'pending') {
+        progressSection.style.display = 'block';
+        document.getElementById('progressBar').style.width = `${session.progress || 0}%`;
+        document.getElementById('progressPercent').textContent = `${session.progress || 0}%`;
+    } else {
+        progressSection.style.display = 'none';
+    }
+
+    // Summary
+    if (session.executive_summary) {
+        document.getElementById('summaryCard').style.display = 'block';
+        document.getElementById('executiveSummary').innerHTML = formatMarkdown(session.executive_summary);
+    }
+
+    // Key findings
+    if (session.key_findings) {
+        document.getElementById('findingsCard').style.display = 'block';
+        document.getElementById('keyFindings').innerHTML = formatMarkdown(session.key_findings);
+    }
+
+    // Tools used visualization
+    updateToolsUsed(session.tools || []);
+
+    // Load results
+    loadResults();
+
+    // Load citations
+    loadCitations();
+
+    // Load related
+    loadRelatedResearch();
+
+    // Update favorite button
+    updateFavoriteButton(session.is_favorite);
+}
+
+function updateToolsUsed(tools) {
+    const grid = document.getElementById('toolsUsedGrid');
+    const toolIcons = {
+        'PUBMED': '<i class="bi bi-journal-medical text-primary"></i>',
+        'MYGENE': '<i class="bi bi-dna text-success"></i>',
+        'MYVARIANT': '<i class="bi bi-bezier2 text-warning"></i>'
+    };
+
+    if (tools.length === 0) {
+        grid.innerHTML = '<div class="col-12 text-center text-muted py-3">No tools used yet</div>';
+        return;
+    }
+
+    grid.innerHTML = tools.map(tool => `
+        <div class="col-4 text-center">
+            <div class="p-2 border rounded">
+                ${toolIcons[tool] || '<i class="bi bi-gear"></i>'}
+                <div class="small mt-1">${tool}</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function loadResults() {
+    try {
+        const response = await fetch(`/api/research/${SESSION_ID}/results`, {
+            headers: getAuthHeaders()
+        });
+
+        if (response.ok) {
+            const results = await response.json();
+            updateTasksAccordion(results);
+        }
+    } catch (error) {
+        console.error('Failed to load results:', error);
+    }
+}
+
+function updateTasksAccordion(results) {
+    const accordion = document.getElementById('tasksAccordion');
+    const noTasks = document.getElementById('noTasks');
+
+    if (!results || results.length === 0) {
+        noTasks.style.display = 'block';
+        return;
+    }
+
+    noTasks.style.display = 'none';
+    document.getElementById('taskCount').textContent = `${results.length} tasks`;
+
+    accordion.innerHTML = results.map((result, index) => `
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button ${index > 0 ? 'collapsed' : ''}" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#task${index}">
+                    <span class="badge bg-${result.success ? 'success' : 'danger'} me-2">
+                        ${result.success ? 'Success' : 'Failed'}
+                    </span>
+                    <span class="text-truncate" style="max-width: 400px;">${escapeHtml(result.task || 'Task ' + (index + 1))}</span>
+                </button>
+            </h2>
+            <div id="task${index}" class="accordion-collapse collapse ${index === 0 ? 'show' : ''}">
+                <div class="accordion-body">
+                    ${result.summary ? `
+                        <div class="mb-3">
+                            <h6><i class="bi bi-file-text me-1"></i>Summary</h6>
+                            <p>${escapeHtml(result.summary)}</p>
+                        </div>
+                    ` : ''}
+                    ${result.result ? `
+                        <div>
+                            <h6><i class="bi bi-code me-1"></i>Raw Result</h6>
+                            <pre class="bg-light p-3 rounded small" style="max-height: 300px; overflow-y: auto;">${escapeHtml(result.result.substring(0, 5000))}</pre>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function loadCitations() {
+    try {
+        const response = await fetch(`/api/research/${SESSION_ID}/citations`, {
+            headers: getAuthHeaders()
+        });
+
+        if (response.ok) {
+            const citations = await response.json();
+            if (citations && citations.length > 0) {
+                document.getElementById('citationsCard').style.display = 'block';
+                document.getElementById('citationsList').innerHTML = citations.map(c => `
+                    <div class="citation-item">
+                        <div class="fw-bold small">${escapeHtml(c.title || 'Untitled')}</div>
+                        <div class="text-muted small">${escapeHtml(c.authors || 'Unknown authors')}</div>
+                        ${c.journal ? `<div class="text-muted small">${escapeHtml(c.journal)}</div>` : ''}
+                        ${c.pubmed_id ? `<a href="https://pubmed.ncbi.nlm.nih.gov/${c.pubmed_id}" target="_blank" class="small">PMID: ${c.pubmed_id}</a>` : ''}
+                    </div>
+                `).join('');
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load citations:', error);
+    }
+}
+
+async function loadRelatedResearch() {
+    try {
+        const response = await fetch(`/api/research/history?limit=5`, {
+            headers: getAuthHeaders()
+        });
+
+        if (response.ok) {
+            const sessions = await response.json();
+            const related = sessions.filter(s => s.id !== SESSION_ID).slice(0, 3);
+
+            if (related.length > 0) {
+                document.getElementById('relatedResearch').innerHTML = related.map(s => `
+                    <a href="/research/${s.id}" class="d-block text-decoration-none text-truncate mb-2">
+                        <span class="badge bg-${getStatusColor(s.status)} me-1">${s.status}</span>
+                        ${escapeHtml(s.objective)}
+                    </a>
+                `).join('');
+            } else {
+                document.getElementById('relatedResearch').innerHTML = '<div class="text-muted small">No related research found</div>';
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load related research:', error);
+    }
+}
+
+function connectWebSocket() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    websocket = new WebSocket(`${protocol}//${window.location.host}/ws/${SESSION_ID}`);
+
+    websocket.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        handleWebSocketMessage(data);
+    };
+
+    websocket.onclose = function() {
+        // Reconnect after 5 seconds
+        setTimeout(connectWebSocket, 5000);
+    };
+
+    websocket.onerror = function(error) {
+        console.error('WebSocket error:', error);
+    };
+}
+
+function handleWebSocketMessage(data) {
+    switch (data.type) {
+        case 'progress':
+            document.getElementById('progressBar').style.width = `${data.progress}%`;
+            document.getElementById('progressPercent').textContent = `${data.progress}%`;
+            if (data.message) {
+                document.getElementById('currentTask').textContent = data.message;
+            }
+            break;
+
+        case 'task_complete':
+            addLiveFeedEntry(`Task completed: ${data.task}`, 'success');
+            loadResults();
+            break;
+
+        case 'result':
+            addLiveFeedEntry(`New result: ${data.summary || 'Result received'}`, 'info');
+            break;
+
+        case 'complete':
+            document.getElementById('progressSection').style.display = 'none';
+            addLiveFeedEntry('Research completed!', 'success');
+            loadSession();
+            showToast('Research completed!', 'success');
+            break;
+
+        case 'error':
+            addLiveFeedEntry(`Error: ${data.message}`, 'error');
+            break;
+    }
+}
+
+function addLiveFeedEntry(message, type = 'info') {
+    if (liveFeedPaused) return;
+
+    const feed = document.getElementById('liveFeed');
+    const entry = document.createElement('div');
+    entry.className = `live-feed-entry ${type}`;
+    entry.innerHTML = `
+        <span class="text-muted">${new Date().toLocaleTimeString()}</span>
+        ${message}
+    `;
+
+    // Remove placeholder if exists
+    const placeholder = feed.querySelector('.text-muted');
+    if (placeholder && placeholder.textContent === 'Waiting for updates...') {
+        placeholder.remove();
+    }
+
+    feed.insertBefore(entry, feed.firstChild);
+
+    // Keep only last 100 entries
+    while (feed.children.length > 100) {
+        feed.removeChild(feed.lastChild);
+    }
+}
+
+function toggleLiveFeed() {
+    liveFeedPaused = !liveFeedPaused;
+    const icon = document.getElementById('liveFeedIcon');
+    icon.className = liveFeedPaused ? 'bi bi-play-fill' : 'bi bi-pause-fill';
+}
+
+async function exportResults(format) {
+    try {
+        const response = await fetch(`/api/research/${SESSION_ID}/export/${format}`, {
+            headers: getAuthHeaders()
+        });
+
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `research_${SESSION_ID}.${format}`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            a.remove();
+            showToast(`Exported as ${format.toUpperCase()}`, 'success');
+        } else {
+            showToast('Export failed', 'danger');
+        }
+    } catch (error) {
+        showToast('Export error: ' + error.message, 'danger');
+    }
+}
+
+function saveAsTemplate() {
+    if (sessionData) {
+        document.getElementById('templateName').value = `Template: ${sessionData.objective.substring(0, 50)}`;
+    }
+    new bootstrap.Modal(document.getElementById('templateModal')).show();
+}
+
+async function saveTemplate() {
+    const name = document.getElementById('templateName').value.trim();
+    const description = document.getElementById('templateDescription').value.trim();
+
+    if (!name) {
+        showToast('Please enter a template name', 'warning');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/templates', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...getAuthHeaders()
+            },
+            body: JSON.stringify({
+                name: name,
+                description: description,
+                objective: sessionData.objective,
+                tools: sessionData.tools,
+                config: {
+                    max_iterations: sessionData.max_iterations,
+                    result_cutoff: sessionData.result_cutoff
+                }
+            })
+        });
+
+        if (response.ok) {
+            showToast('Template saved successfully', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('templateModal')).hide();
+        } else {
+            showToast('Failed to save template', 'danger');
+        }
+    } catch (error) {
+        showToast('Error saving template: ' + error.message, 'danger');
+    }
+}
+
+async function toggleFavorite() {
+    try {
+        const response = await fetch(`/api/favorites/${SESSION_ID}`, {
+            method: sessionData.is_favorite ? 'DELETE' : 'POST',
+            headers: getAuthHeaders()
+        });
+
+        if (response.ok) {
+            sessionData.is_favorite = !sessionData.is_favorite;
+            updateFavoriteButton(sessionData.is_favorite);
+            showToast(sessionData.is_favorite ? 'Added to favorites' : 'Removed from favorites', 'success');
+        }
+    } catch (error) {
+        showToast('Error updating favorite: ' + error.message, 'danger');
+    }
+}
+
+function updateFavoriteButton(isFavorite) {
+    const btn = document.getElementById('favoriteBtn');
+    btn.innerHTML = isFavorite ?
+        '<i class="bi bi-star-fill text-warning"></i>' :
+        '<i class="bi bi-star"></i>';
+}
+
+function formatDuration(seconds) {
+    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+    return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
+}
+
+function formatMarkdown(text) {
+    // Simple markdown formatting
+    return text
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/\n/g, '<br>');
+}
+</script>
+{% endblock %}

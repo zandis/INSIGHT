@@ -1,0 +1,617 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Panel{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-shield-lock me-2"></i>Admin Panel</h2>
+        <div class="btn-group">
+            <button class="btn btn-outline-primary" onclick="refreshAll()">
+                <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+            </button>
+            <button class="btn btn-outline-danger" onclick="showMaintenanceMode()">
+                <i class="bi bi-gear me-1"></i>Maintenance
+            </button>
+        </div>
+    </div>
+
+    <!-- System Overview -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="opacity-75">Total Users</h6>
+                            <h2 id="totalUsers">-</h2>
+                        </div>
+                        <i class="bi bi-people fs-1 opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="opacity-75">Active Sessions</h6>
+                            <h2 id="activeSessions">-</h2>
+                        </div>
+                        <i class="bi bi-activity fs-1 opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="opacity-75">API Calls Today</h6>
+                            <h2 id="apiCallsToday">-</h2>
+                        </div>
+                        <i class="bi bi-cloud fs-1 opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="opacity-75">System Load</h6>
+                            <h2 id="systemLoad">-</h2>
+                        </div>
+                        <i class="bi bi-cpu fs-1 opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <ul class="nav nav-tabs mb-4" id="adminTabs">
+        <li class="nav-item">
+            <a class="nav-link active" data-bs-toggle="tab" href="#usersTab">
+                <i class="bi bi-people me-1"></i>Users
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" data-bs-toggle="tab" href="#sessionsTab">
+                <i class="bi bi-journal-text me-1"></i>Sessions
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" data-bs-toggle="tab" href="#logsTab">
+                <i class="bi bi-file-text me-1"></i>Logs
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" data-bs-toggle="tab" href="#configTab">
+                <i class="bi bi-gear me-1"></i>Configuration
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" data-bs-toggle="tab" href="#healthTab">
+                <i class="bi bi-heart-pulse me-1"></i>Health
+            </a>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+        <!-- Users Tab -->
+        <div class="tab-pane fade show active" id="usersTab">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">User Management</h5>
+                    <button class="btn btn-sm btn-primary" onclick="showAddUserModal()">
+                        <i class="bi bi-plus me-1"></i>Add User
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Username</th>
+                                    <th>Email</th>
+                                    <th>Role</th>
+                                    <th>Sessions</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usersTable">
+                                <tr><td colspan="7" class="text-center py-4">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sessions Tab -->
+        <div class="tab-pane fade" id="sessionsTab">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Research Sessions</h5>
+                    <div>
+                        <button class="btn btn-sm btn-outline-danger" onclick="cleanupOldSessions()">
+                            <i class="bi bi-trash me-1"></i>Cleanup Old
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>User</th>
+                                    <th>Objective</th>
+                                    <th>Status</th>
+                                    <th>Results</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sessionsTable">
+                                <tr><td colspan="7" class="text-center py-4">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logs Tab -->
+        <div class="tab-pane fade" id="logsTab">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">System Logs</h5>
+                    <div class="d-flex gap-2">
+                        <select class="form-select form-select-sm" id="logLevel" style="width: 120px;">
+                            <option value="">All Levels</option>
+                            <option value="ERROR">Error</option>
+                            <option value="WARNING">Warning</option>
+                            <option value="INFO">Info</option>
+                            <option value="DEBUG">Debug</option>
+                        </select>
+                        <button class="btn btn-sm btn-outline-primary" onclick="refreshLogs()">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="downloadLogs()">
+                            <i class="bi bi-download"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="bg-dark text-light p-3 font-monospace small" style="max-height: 500px; overflow-y: auto;" id="logsContainer">
+                        Loading logs...
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Configuration Tab -->
+        <div class="tab-pane fade" id="configTab">
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-sliders me-2"></i>General Settings</h5>
+                        </div>
+                        <div class="card-body">
+                            <form id="configForm">
+                                <div class="mb-3">
+                                    <label class="form-label">Max Iterations (Default)</label>
+                                    <input type="number" class="form-control" id="configMaxIterations" value="5">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Result Cutoff (Default)</label>
+                                    <input type="number" class="form-control" id="configResultCutoff" value="20000">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Session Timeout (minutes)</label>
+                                    <input type="number" class="form-control" id="configSessionTimeout" value="60">
+                                </div>
+                                <div class="form-check mb-3">
+                                    <input type="checkbox" class="form-check-input" id="configAllowRegistration" checked>
+                                    <label class="form-check-label">Allow New User Registration</label>
+                                </div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-save me-1"></i>Save Settings
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-speedometer me-2"></i>Rate Limits</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">PubMed API (requests/minute)</label>
+                                <input type="number" class="form-control" id="ratePubmed" value="10">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">MyGene API (requests/minute)</label>
+                                <input type="number" class="form-control" id="rateMygene" value="30">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">MyVariant API (requests/minute)</label>
+                                <input type="number" class="form-control" id="rateMyvariant" value="30">
+                            </div>
+                            <button class="btn btn-primary" onclick="saveRateLimits()">
+                                <i class="bi bi-save me-1"></i>Save Rate Limits
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Health Tab -->
+        <div class="tab-pane fade" id="healthTab">
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-heart-pulse me-2"></i>Service Health</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="healthChecks">Loading...</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-memory me-2"></i>System Resources</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label d-flex justify-content-between">
+                                    <span>CPU Usage</span>
+                                    <span id="cpuUsage">-</span>
+                                </label>
+                                <div class="progress">
+                                    <div class="progress-bar" id="cpuBar" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label d-flex justify-content-between">
+                                    <span>Memory Usage</span>
+                                    <span id="memoryUsage">-</span>
+                                </label>
+                                <div class="progress">
+                                    <div class="progress-bar bg-success" id="memoryBar" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="form-label d-flex justify-content-between">
+                                    <span>Disk Usage</span>
+                                    <span id="diskUsage">-</span>
+                                </label>
+                                <div class="progress">
+                                    <div class="progress-bar bg-warning" id="diskBar" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-broadcast me-2"></i>Circuit Breaker Status</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3" id="circuitBreakers">
+                                Loading...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add User Modal -->
+<div class="modal fade" id="addUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add New User</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addUserForm">
+                    <div class="mb-3">
+                        <label class="form-label">Username</label>
+                        <input type="text" class="form-control" id="newUsername" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" id="newEmail" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Password</label>
+                        <input type="password" class="form-control" id="newPassword" required>
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="newIsAdmin">
+                        <label class="form-check-label">Admin privileges</label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="addUser()">Add User</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadAdminStats();
+    loadUsers();
+    loadSessions();
+    loadLogs();
+    loadHealth();
+
+    // Refresh periodically
+    setInterval(loadAdminStats, 30000);
+    setInterval(loadHealth, 30000);
+});
+
+async function loadAdminStats() {
+    try {
+        const response = await fetch('/api/admin/stats', {
+            headers: getAuthHeaders()
+        });
+        if (response.ok) {
+            const stats = await response.json();
+            document.getElementById('totalUsers').textContent = stats.total_users || 0;
+            document.getElementById('activeSessions').textContent = stats.active_sessions || 0;
+            document.getElementById('apiCallsToday').textContent = stats.api_calls_today || 0;
+            document.getElementById('systemLoad').textContent = `${stats.system_load || 0}%`;
+        }
+    } catch (error) {
+        console.error('Failed to load admin stats:', error);
+    }
+}
+
+async function loadUsers() {
+    try {
+        const response = await fetch('/api/admin/users', {
+            headers: getAuthHeaders()
+        });
+        if (response.ok) {
+            const users = await response.json();
+            const tbody = document.getElementById('usersTable');
+            tbody.innerHTML = users.map(user => `
+                <tr>
+                    <td>${user.id}</td>
+                    <td>${escapeHtml(user.username)}</td>
+                    <td>${escapeHtml(user.email || '-')}</td>
+                    <td><span class="badge bg-${user.is_admin ? 'danger' : 'secondary'}">${user.is_admin ? 'Admin' : 'User'}</span></td>
+                    <td>${user.session_count || 0}</td>
+                    <td><small class="text-muted">${formatDate(user.created_at)}</small></td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="editUser(${user.id})">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteUser(${user.id})">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+    } catch (error) {
+        console.error('Failed to load users:', error);
+    }
+}
+
+async function loadSessions() {
+    try {
+        const response = await fetch('/api/admin/sessions', {
+            headers: getAuthHeaders()
+        });
+        if (response.ok) {
+            const sessions = await response.json();
+            const tbody = document.getElementById('sessionsTable');
+            tbody.innerHTML = sessions.map(session => `
+                <tr>
+                    <td><small>${session.id.substring(0, 8)}...</small></td>
+                    <td>${escapeHtml(session.username || '-')}</td>
+                    <td class="text-truncate" style="max-width: 200px;">${escapeHtml(session.objective)}</td>
+                    <td><span class="badge bg-${getStatusColor(session.status)}">${session.status}</span></td>
+                    <td>${session.results_count || 0}</td>
+                    <td><small class="text-muted">${formatDate(session.created_at)}</small></td>
+                    <td>
+                        <a href="/research/${session.id}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-eye"></i>
+                        </a>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteSession('${session.id}')">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+    } catch (error) {
+        console.error('Failed to load sessions:', error);
+    }
+}
+
+async function loadLogs() {
+    const level = document.getElementById('logLevel').value;
+    try {
+        const response = await fetch(`/api/admin/logs?level=${level}&limit=500`, {
+            headers: getAuthHeaders()
+        });
+        if (response.ok) {
+            const logs = await response.json();
+            const container = document.getElementById('logsContainer');
+            container.innerHTML = logs.map(log => {
+                const levelClass = log.level === 'ERROR' ? 'text-danger' :
+                                   log.level === 'WARNING' ? 'text-warning' : '';
+                return `<div class="${levelClass}">[${log.timestamp}] [${log.level}] ${escapeHtml(log.message)}</div>`;
+            }).join('') || '<span class="text-muted">No logs available</span>';
+        }
+    } catch (error) {
+        console.error('Failed to load logs:', error);
+    }
+}
+
+async function loadHealth() {
+    try {
+        const response = await fetch('/api/health');
+        const health = await response.json();
+
+        // Health checks
+        document.getElementById('healthChecks').innerHTML = `
+            <div class="list-group list-group-flush">
+                ${Object.entries(health.services || {}).map(([name, status]) => `
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>${name}</span>
+                        <span class="badge bg-${status === 'ok' ? 'success' : 'danger'}">${status}</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+
+        // System resources
+        if (health.resources) {
+            const cpu = health.resources.cpu || 0;
+            const memory = health.resources.memory || 0;
+            const disk = health.resources.disk || 0;
+
+            document.getElementById('cpuUsage').textContent = `${cpu}%`;
+            document.getElementById('cpuBar').style.width = `${cpu}%`;
+            document.getElementById('memoryUsage').textContent = `${memory}%`;
+            document.getElementById('memoryBar').style.width = `${memory}%`;
+            document.getElementById('diskUsage').textContent = `${disk}%`;
+            document.getElementById('diskBar').style.width = `${disk}%`;
+        }
+
+        // Circuit breakers
+        if (health.circuit_breakers) {
+            document.getElementById('circuitBreakers').innerHTML = Object.entries(health.circuit_breakers).map(([name, state]) => `
+                <div class="col-md-4">
+                    <div class="border rounded p-3 text-center">
+                        <h6>${name}</h6>
+                        <span class="badge bg-${state === 'closed' ? 'success' : state === 'open' ? 'danger' : 'warning'}">
+                            ${state.toUpperCase()}
+                        </span>
+                    </div>
+                </div>
+            `).join('');
+        }
+    } catch (error) {
+        console.error('Failed to load health:', error);
+    }
+}
+
+function showAddUserModal() {
+    new bootstrap.Modal(document.getElementById('addUserModal')).show();
+}
+
+async function addUser() {
+    try {
+        const response = await fetch('/api/admin/users', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...getAuthHeaders()
+            },
+            body: JSON.stringify({
+                username: document.getElementById('newUsername').value,
+                email: document.getElementById('newEmail').value,
+                password: document.getElementById('newPassword').value,
+                is_admin: document.getElementById('newIsAdmin').checked
+            })
+        });
+
+        if (response.ok) {
+            showToast('User added successfully', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('addUserModal')).hide();
+            loadUsers();
+        } else {
+            const error = await response.json();
+            showToast(error.detail || 'Failed to add user', 'danger');
+        }
+    } catch (error) {
+        showToast('Error: ' + error.message, 'danger');
+    }
+}
+
+async function deleteUser(id) {
+    if (!confirm('Are you sure you want to delete this user?')) return;
+    try {
+        const response = await fetch(`/api/admin/users/${id}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+        });
+        if (response.ok) {
+            showToast('User deleted', 'success');
+            loadUsers();
+        }
+    } catch (error) {
+        showToast('Error: ' + error.message, 'danger');
+    }
+}
+
+async function deleteSession(id) {
+    if (!confirm('Are you sure you want to delete this session?')) return;
+    try {
+        const response = await fetch(`/api/research/${id}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+        });
+        if (response.ok) {
+            showToast('Session deleted', 'success');
+            loadSessions();
+        }
+    } catch (error) {
+        showToast('Error: ' + error.message, 'danger');
+    }
+}
+
+function refreshLogs() {
+    loadLogs();
+}
+
+function refreshAll() {
+    loadAdminStats();
+    loadUsers();
+    loadSessions();
+    loadLogs();
+    loadHealth();
+    showToast('Data refreshed', 'success');
+}
+
+function cleanupOldSessions() {
+    if (!confirm('Delete all sessions older than 30 days?')) return;
+    // Implementation
+    showToast('Cleanup started', 'info');
+}
+
+function downloadLogs() {
+    window.location.href = '/api/admin/logs/download';
+}
+
+document.getElementById('logLevel').addEventListener('change', loadLogs);
+</script>
+{% endblock %}

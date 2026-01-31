@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!-- Hero Section -->
+    <div class="row justify-content-center mb-5">
+        <div class="col-lg-8 text-center">
+            <h1 class="display-4 mb-3">
+                <i class="bi bi-lightbulb-fill text-warning"></i>
+                INSIGHT
+            </h1>
+            <p class="lead text-muted">
+                Autonomous AI-Powered Medical Research Platform
+            </p>
+            <p class="mb-4">
+                Leverage multi-agent AI to conduct comprehensive research across PubMed,
+                MyGene, and MyVariant databases. Get intelligent summaries, citations,
+                and actionable insights.
+            </p>
+            <a href="/research/new" class="btn btn-primary btn-lg me-2">
+                <i class="bi bi-rocket-takeoff me-2"></i>Start Research
+            </a>
+            <a href="/templates" class="btn btn-outline-primary btn-lg">
+                <i class="bi bi-collection me-2"></i>Browse Templates
+            </a>
+        </div>
+    </div>
+
+    <!-- Features Grid -->
+    <div class="row g-4 mb-5">
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <div class="feature-icon bg-primary bg-gradient text-white rounded-circle mb-3 mx-auto">
+                        <i class="bi bi-robot"></i>
+                    </div>
+                    <h5 class="card-title">Multi-Agent AI</h5>
+                    <p class="card-text text-muted">
+                        Boss and Worker agents collaborate to break down complex research
+                        objectives into manageable tasks.
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <div class="feature-icon bg-success bg-gradient text-white rounded-circle mb-3 mx-auto">
+                        <i class="bi bi-database"></i>
+                    </div>
+                    <h5 class="card-title">Multi-Source Data</h5>
+                    <p class="card-text text-muted">
+                        Query PubMed literature, MyGene gene databases, and MyVariant
+                        genetic variant information seamlessly.
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <div class="feature-icon bg-info bg-gradient text-white rounded-circle mb-3 mx-auto">
+                        <i class="bi bi-graph-up"></i>
+                    </div>
+                    <h5 class="card-title">Real-Time Progress</h5>
+                    <p class="card-text text-muted">
+                        Watch your research unfold with live updates, progress tracking,
+                        and interactive visualizations.
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <div class="feature-icon bg-warning bg-gradient text-white rounded-circle mb-3 mx-auto">
+                        <i class="bi bi-file-earmark-pdf"></i>
+                    </div>
+                    <h5 class="card-title">Export Formats</h5>
+                    <p class="card-text text-muted">
+                        Export your findings to PDF, JSON, CSV, BibTeX, or Markdown
+                        for easy sharing and citation.
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <div class="feature-icon bg-danger bg-gradient text-white rounded-circle mb-3 mx-auto">
+                        <i class="bi bi-bell"></i>
+                    </div>
+                    <h5 class="card-title">Notifications</h5>
+                    <p class="card-text text-muted">
+                        Get notified via email or webhooks when your research
+                        completes or encounters issues.
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <div class="feature-icon bg-secondary bg-gradient text-white rounded-circle mb-3 mx-auto">
+                        <i class="bi bi-bookmark-star"></i>
+                    </div>
+                    <h5 class="card-title">Templates & Favorites</h5>
+                    <p class="card-text text-muted">
+                        Save research templates for common queries and bookmark
+                        important findings for later.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Start Section -->
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card border-0 shadow">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-lightning-charge me-2"></i>Quick Start</h5>
+                </div>
+                <div class="card-body">
+                    <form id="quickStartForm" class="mb-0">
+                        <div class="mb-3">
+                            <label for="quickObjective" class="form-label">Research Objective</label>
+                            <textarea class="form-control" id="quickObjective" rows="2"
+                                placeholder="e.g., Find recent research on BRCA1 gene mutations and their role in breast cancer..."></textarea>
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="toolPubmed" checked>
+                                    <label class="form-check-label" for="toolPubmed">
+                                        <i class="bi bi-journal-medical me-1"></i>PubMed
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="toolMygene" checked>
+                                    <label class="form-check-label" for="toolMygene">
+                                        <i class="bi bi-dna me-1"></i>MyGene
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="toolMyvariant">
+                                    <label class="form-check-label" for="toolMyvariant">
+                                        <i class="bi bi-bezier2 me-1"></i>MyVariant
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-play-fill me-2"></i>Start Research
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Research Section -->
+    <div class="row mt-5" id="recentResearchSection" style="display: none;">
+        <div class="col-12">
+            <h4 class="mb-3"><i class="bi bi-clock-history me-2"></i>Recent Research</h4>
+            <div class="row g-3" id="recentResearchList">
+                <!-- Populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Quick start form
+    const quickStartForm = document.getElementById('quickStartForm');
+    quickStartForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const objective = document.getElementById('quickObjective').value.trim();
+        if (!objective) {
+            showToast('Please enter a research objective', 'warning');
+            return;
+        }
+
+        const tools = [];
+        if (document.getElementById('toolPubmed').checked) tools.push('PUBMED');
+        if (document.getElementById('toolMygene').checked) tools.push('MYGENE');
+        if (document.getElementById('toolMyvariant').checked) tools.push('MYVARIANT');
+
+        if (tools.length === 0) {
+            showToast('Please select at least one research tool', 'warning');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/research/start', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...getAuthHeaders()
+                },
+                body: JSON.stringify({
+                    objective: objective,
+                    tools: tools,
+                    max_iterations: 5
+                })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                showToast('Research started successfully!', 'success');
+                window.location.href = `/research/${data.session_id}`;
+            } else {
+                showToast(data.detail || 'Failed to start research', 'danger');
+            }
+        } catch (error) {
+            showToast('Error starting research: ' + error.message, 'danger');
+        }
+    });
+
+    // Load recent research
+    loadRecentResearch();
+});
+
+async function loadRecentResearch() {
+    try {
+        const response = await fetch('/api/research/history?limit=6', {
+            headers: getAuthHeaders()
+        });
+
+        if (response.ok) {
+            const sessions = await response.json();
+            if (sessions.length > 0) {
+                document.getElementById('recentResearchSection').style.display = 'block';
+                const list = document.getElementById('recentResearchList');
+                list.innerHTML = sessions.map(session => `
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h6 class="card-title text-truncate">${escapeHtml(session.objective)}</h6>
+                                <p class="card-text small text-muted">
+                                    <span class="badge bg-${getStatusColor(session.status)}">${session.status}</span>
+                                    <br>${formatDate(session.created_at)}
+                                </p>
+                                <a href="/research/${session.id}" class="btn btn-sm btn-outline-primary">View</a>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load recent research:', error);
+    }
+}
+</script>
+{% endblock %}

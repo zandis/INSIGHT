@@ -1,0 +1,455 @@
+/* INSIGHT Web Application Styles */
+
+:root {
+    --insight-primary: #0d6efd;
+    --insight-success: #198754;
+    --insight-warning: #ffc107;
+    --insight-danger: #dc3545;
+    --insight-info: #0dcaf0;
+    --insight-dark: #212529;
+    --insight-light: #f8f9fa;
+}
+
+/* Global Styles */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background-color: #f5f7fa;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+main {
+    flex: 1;
+}
+
+/* Navbar Customization */
+.navbar-brand {
+    font-weight: 700;
+    font-size: 1.5rem;
+}
+
+.notification-badge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    font-size: 0.65rem;
+    padding: 2px 5px;
+}
+
+/* Feature Icons on Home Page */
+.feature-icon {
+    width: 64px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+}
+
+/* Cards */
+.card {
+    border: none;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    transition: box-shadow 0.2s ease-in-out;
+}
+
+.card:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
+}
+
+.card-header {
+    background-color: transparent;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    font-weight: 600;
+}
+
+/* Progress Bars */
+.progress {
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    transition: width 0.3s ease;
+}
+
+/* Tables */
+.table {
+    margin-bottom: 0;
+}
+
+.table th {
+    font-weight: 600;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6c757d;
+    border-bottom-width: 1px;
+}
+
+.table td {
+    vertical-align: middle;
+}
+
+/* Badges */
+.badge {
+    font-weight: 500;
+    padding: 0.4em 0.8em;
+}
+
+/* Buttons */
+.btn {
+    font-weight: 500;
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%);
+    border: none;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #0b5ed7 0%, #0a58ca 100%);
+    transform: translateY(-1px);
+}
+
+/* Forms */
+.form-control, .form-select {
+    border-radius: 6px;
+    border: 1px solid #dee2e6;
+    padding: 0.625rem 0.875rem;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--insight-primary);
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
+}
+
+/* Toast Messages */
+.toast-container {
+    z-index: 1100;
+}
+
+.toast {
+    border-radius: 8px;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+/* Live Feed */
+.live-feed-entry {
+    padding: 0.5rem;
+    border-bottom: 1px solid #eee;
+    font-size: 0.875rem;
+}
+
+.live-feed-entry:last-child {
+    border-bottom: none;
+}
+
+.live-feed-entry.error {
+    background-color: #fff5f5;
+    color: #c53030;
+}
+
+.live-feed-entry.success {
+    background-color: #f0fff4;
+    color: #276749;
+}
+
+.live-feed-entry.info {
+    background-color: #ebf8ff;
+    color: #2b6cb0;
+}
+
+/* Citation Items */
+.citation-item {
+    padding: 0.75rem;
+    border-bottom: 1px solid #eee;
+}
+
+.citation-item:last-child {
+    border-bottom: none;
+}
+
+.citation-item:hover {
+    background-color: #f8f9fa;
+}
+
+/* Tool Cards */
+.tool-card {
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 2px solid transparent;
+}
+
+.tool-card:hover {
+    border-color: var(--insight-primary);
+    transform: translateY(-2px);
+}
+
+.tool-card.selected {
+    border-color: var(--insight-primary);
+    background-color: rgba(13, 110, 253, 0.05);
+}
+
+.tool-card i {
+    transition: transform 0.2s;
+}
+
+.tool-card.selected i {
+    transform: scale(1.1);
+}
+
+/* Accordion */
+.accordion-button:not(.collapsed) {
+    background-color: rgba(13, 110, 253, 0.05);
+    color: var(--insight-primary);
+}
+
+.accordion-button:focus {
+    box-shadow: none;
+    border-color: rgba(0, 0, 0, 0.125);
+}
+
+/* Footer */
+.footer {
+    background-color: #fff;
+    border-top: 1px solid #dee2e6;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .navbar-brand {
+        font-size: 1.25rem;
+    }
+
+    .feature-icon {
+        width: 48px;
+        height: 48px;
+        font-size: 1.25rem;
+    }
+
+    .card-body {
+        padding: 1rem;
+    }
+}
+
+/* Loading Spinner */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1050;
+}
+
+/* Status Colors */
+.status-pending { color: #6c757d; }
+.status-running { color: #ffc107; }
+.status-completed { color: #198754; }
+.status-failed { color: #dc3545; }
+
+/* Knowledge Graph Styles */
+.knowledge-graph {
+    width: 100%;
+    height: 400px;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.node {
+    cursor: pointer;
+}
+
+.node circle {
+    transition: all 0.2s;
+}
+
+.node:hover circle {
+    stroke-width: 3px;
+}
+
+.link {
+    stroke: #999;
+    stroke-opacity: 0.6;
+}
+
+/* Research Card Hover Effects */
+.research-card {
+    transition: all 0.3s ease;
+}
+
+.research-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+/* Metrics Dashboard */
+.metric-card {
+    text-align: center;
+    padding: 1.5rem;
+}
+
+.metric-value {
+    font-size: 2.5rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.metric-label {
+    font-size: 0.875rem;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 0.5rem;
+}
+
+/* Timeline */
+.timeline {
+    position: relative;
+    padding-left: 30px;
+}
+
+.timeline::before {
+    content: '';
+    position: absolute;
+    left: 10px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #dee2e6;
+}
+
+.timeline-item {
+    position: relative;
+    padding-bottom: 1.5rem;
+}
+
+.timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -24px;
+    top: 4px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--insight-primary);
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 2px var(--insight-primary);
+}
+
+.timeline-item.completed::before {
+    background: var(--insight-success);
+    box-shadow: 0 0 0 2px var(--insight-success);
+}
+
+.timeline-item.error::before {
+    background: var(--insight-danger);
+    box-shadow: 0 0 0 2px var(--insight-danger);
+}
+
+/* Animations */
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.pulse {
+    animation: pulse 2s infinite;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease-out;
+}
+
+/* Code Blocks */
+pre {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 1rem;
+    overflow-x: auto;
+    font-size: 0.875rem;
+}
+
+code {
+    color: #e83e8c;
+    background-color: #f8f9fa;
+    padding: 0.2em 0.4em;
+    border-radius: 3px;
+    font-size: 0.875em;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+    body.auto-dark {
+        background-color: #1a1a2e;
+        color: #eee;
+    }
+
+    body.auto-dark .card {
+        background-color: #16213e;
+        border-color: #1f4068;
+    }
+
+    body.auto-dark .table {
+        color: #eee;
+    }
+
+    body.auto-dark .form-control,
+    body.auto-dark .form-select {
+        background-color: #1f4068;
+        border-color: #1f4068;
+        color: #eee;
+    }
+}
+
+/* Print Styles */
+@media print {
+    .navbar, .footer, .btn, .no-print {
+        display: none !important;
+    }
+
+    .card {
+        box-shadow: none;
+        border: 1px solid #dee2e6;
+    }
+
+    body {
+        background: #fff;
+    }
+}
