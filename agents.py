@@ -130,12 +130,53 @@ Note: If a task has already been completed, do not write that same task again in
     ].strip()
     tasks = content[content.find("TASKS") + len("TASKS") :].strip()
 
-    new_task_list = literal_eval(tasks)
+    # Safely parse the task list with error handling
+    try:
+        new_task_list = literal_eval(tasks)
+        if not isinstance(new_task_list, list):
+            logger.error(f"Boss agent returned non-list type: {type(new_task_list)}")
+            new_task_list = []
+    except (ValueError, SyntaxError) as e:
+        logger.error(f"Failed to parse task list from boss agent: {e}")
+        logger.debug(f"Raw tasks string: {tasks[:500]}")
+        # Attempt to extract tasks manually
+        new_task_list = _extract_tasks_fallback(tasks)
 
     print(Fore.CYAN + "\033[1m\n*****BOSS THOUGHTS*****\n\033[0m")
     print(Fore.CYAN + thoughts)
 
     return deque(new_task_list)
+
+
+def _extract_tasks_fallback(tasks_str: str) -> List[str]:
+    """
+    Fallback parser for malformed task lists.
+
+    Args:
+        tasks_str: Raw string containing tasks
+
+    Returns:
+        List of extracted tasks
+    """
+    import re
+
+    # Try to find array-like structure
+    match = re.search(r'\[([^\]]+)\]', tasks_str, re.DOTALL)
+    if match:
+        content = match.group(1)
+        # Extract quoted strings
+        tasks = re.findall(r'["\']([^"\']+)["\']', content)
+        if tasks:
+            logger.info(f"Fallback parser extracted {len(tasks)} tasks")
+            return tasks
+
+    # Last resort: split by newlines and clean
+    lines = [line.strip().strip('-').strip('*').strip()
+             for line in tasks_str.split('\n')
+             if line.strip() and not line.strip().startswith(('[', ']'))]
+
+    logger.warning(f"Using line-based fallback, extracted {len(lines)} potential tasks")
+    return lines[:10]  # Limit to prevent runaway lists
 
 
 def worker_agent(
@@ -189,15 +230,42 @@ def worker_agent(
 
     prompt += f"\nYour task: {task}\nResponse:"
 
-    response = get_gpt_completion(prompt, engine="text-davinci-003", temp=0.0)
+    # Use modern model with fallback
+    try:
+        response = get_gpt_chat_completion(
+            system_prompt="You are an AI research assistant that completes tasks accurately and efficiently.",
+            user_prompt=prompt,
+            temp=0.0
+        )
+    except Exception as e:
+        logger.warning(f"Chat completion failed, falling back to completion API: {e}")
+        response = get_gpt_completion(prompt, engine="gpt-3.5-turbo-instruct", temp=0.0)
 
     return response, result_is_python
 
 
 def data_cleaning_agent(result: str, objective: str) -> str:
-    prompt = f"""You are an AI who summarizes, cleans, and organizes data. It is important that you do not delete any information that could be useful. Respond with only the updated information.
+    """
+    Clean and organize raw data results.
+
+    Args:
+        result: Raw data to clean
+        objective: Research objective for context
+
+    Returns:
+        Cleaned and organized data string
+    """
+    system_prompt = "You are an AI who summarizes, cleans, and organizes data. Do not delete any potentially useful information. Be concise but comprehensive."
+    user_prompt = f"""Clean and organize the following data:
+
 Data: {result}
+
 Cleaned Data:"""
-    response = get_gpt_completion(prompt, engine="text-davinci-003", temp=0.1)
+
+    try:
+        response = get_gpt_chat_completion(system_prompt, user_prompt, temp=0.1)
+    except Exception as e:
+        logger.warning(f"Data cleaning failed: {e}")
+        response = result  # Return original if cleaning fails
 
     return response

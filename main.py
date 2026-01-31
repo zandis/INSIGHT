@@ -224,11 +224,16 @@ def run(
     print(Fore.CYAN, "\033[1m\n*****OBJECTIVE*****\n\033[0m")
     print(OBJECTIVE)
 
-
-    result, completed_tasks = [], []
+    # Initialize loop variables (preserve loaded state from reload_path)
+    # Only reset if not reloading from previous session
+    result = []
     task = ""
-    task_list = deque()
-    cache=defaultdict(list)
+    if not reload_path:
+        # Fresh start - initialize empty state
+        task_list = deque()
+        completed_tasks = []
+        cache = defaultdict(list)
+    # Otherwise keep the values loaded from reload_path (lines 180-190)
 
     for _ in range(MAX_ITERATIONS):
         result, task, task_list, summaries = run_(

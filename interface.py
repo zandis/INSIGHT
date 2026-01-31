@@ -27,67 +27,103 @@ def get_objective(path):
     return state_data["objective"]
 
 
-def prompt_user():
-    reload_path = None
-    execution_type = get_input("Would you like to run a new execution (1) or resume an old execution (2)? ", type_=int, range_=(1, 2))
+def prompt_user(max_retries: int = 5):
+    """
+    Interactive prompt to gather user preferences.
 
-    if execution_type == 1:
-        objective = get_input("Enter your objective: ")
-        print(f"Your objective is: {objective}")
-    elif execution_type == 2:
-        while True:
-            reload_path = get_input("Enter the path to your previous execution (e.g. out/Cure breast cancer_2023-04-29_15-13-10): ")
+    Args:
+        max_retries: Maximum number of times user can restart configuration
 
-            if os.path.isdir(reload_path):
-                break
+    Returns:
+        Tuple of (objective, tool_flags, iterations, reload_path, document_path)
+    """
+    retry_count = 0
+
+    while retry_count < max_retries:
+        reload_path = None
+        execution_type = get_input("Would you like to run a new execution (1) or resume an old execution (2)? ", type_=int, range_=(1, 2))
+
+        if execution_type == 1:
+            objective = get_input("Enter your objective: ")
+            if not objective or not objective.strip():
+                print("Objective cannot be empty. Please try again.")
+                retry_count += 1
+                continue
+            print(f"Your objective is: {objective}")
+        elif execution_type == 2:
+            while True:
+                reload_path = get_input("Enter the path to your previous execution (e.g. out/Cure breast cancer_2023-04-29_15-13-10): ")
+
+                if os.path.isdir(reload_path):
+                    break
+                else:
+                    print("Directory does not exist. Please try again.")
+
+            objective = get_objective(reload_path)
+            print(f"Resuming execution from: {reload_path}")
+        else:
+            objective = None
+
+        print("Now we will do tool selection.")
+        tools = ["MYGENE", "PUBMED", "MYVARIANT"]
+        tool_flags = {}
+
+        for tool in tools:
+            while True:
+                tool_prompt = f"Do you want to use {tool}? Type 1 for yes and 0 for no: "
+                tool_input = get_input(tool_prompt, type_=int, range_=(0, 1))
+                if tool_input is not None:
+                    tool_flags[tool] = bool(tool_input)
+                    break
+                else:
+                    print(f"Unrecognized input, defaulting to 'yes' for using {tool}")
+                    tool_flags[tool] = True
+
+        # Validate at least one tool is selected
+        if not any(tool_flags.values()):
+            print(Fore.YELLOW + "Warning: No tools selected. At least one tool is recommended.")
+
+        iterations_prompt = "How many iterations would you like to run? "
+        iterations = get_input(iterations_prompt, type_=int, min_=1)
+
+        # Validate iterations bounds
+        if iterations is None or iterations < 1:
+            iterations = 1
+        elif iterations > 100:
+            print(f"Warning: {iterations} iterations is very high. Limiting to 100.")
+            iterations = 100
+
+        document_check = get_input("Would you like to load your own data as a document? Type 1 for yes and 0 for no: ", type_=int, range_=(0, 1))
+        document_path = None
+        if document_check == 1:
+            while True:
+                document_path = get_input("Enter the path to the document: ")
+                if os.path.isfile(document_path):
+                    break
+                else:
+                    print("File does not exist. Please try again.")
+
+        print("\nHere are the options you've selected:")
+        print(f"Objective: {objective}")
+        for tool, flag in tool_flags.items():
+            print(f"Use {tool}: {'Yes' if flag else 'No'}")
+        print(f"Iterations: {iterations}")
+        if document_path is not None:
+            print(f"Document: {document_path}")
+
+        correct_prompt = "Does this look correct? Type 1 for yes and 0 for no: "
+        correct = get_input(correct_prompt, type_=int, range_=(0, 1))
+
+        if correct:
+            print(Fore.GREEN + "\033[1mStarting INSIGHT with your options!\033[0m")
+            return objective, tool_flags, iterations, reload_path, document_path
+        else:
+            retry_count += 1
+            if retry_count < max_retries:
+                print(f"\nLet's try again. ({max_retries - retry_count} attempts remaining)\n")
             else:
-                print("Directory does not exist. Please try again.")
+                print("\nMaximum retries reached. Using last configuration.")
+                return objective, tool_flags, iterations, reload_path, document_path
 
-        objective = get_objective(reload_path)
-        print(f"Resuming execution from: {reload_path}")
-
-    print("Now we will do tool selection.")
-    tools = ["MYGENE", "PUBMED", "MYVARIANT"]
-    tool_flags = {}
-
-    for tool in tools:
-        while True:
-            tool_prompt = f"Do you want to use {tool}? Type 1 for yes and 0 for no: "
-            tool_input = get_input(tool_prompt, type_=int, range_=(0, 1))
-            if tool_input is not None:
-                tool_flags[tool] = bool(tool_input)
-                break
-            else:
-                print(f"Unrecognized input, defaulting to 'yes' for using {tool}")
-                tool_flags[tool] = True
-
-    iterations_prompt = "How many iterations would you like to run? "
-    iterations = get_input(iterations_prompt, type_=int, min_=1)
-
-    document_check = get_input("Would you like to load your own data as a document? Type 1 for yes and 0 for no: ", type_=int, range_=(0, 1))
-    document_path = None
-    if document_check == 1:
-        while True:
-            document_path = get_input("Enter the path to the document: ")
-            if os.path.isfile(document_path):
-                break
-            else:
-                print("File does not exist. Please try again.")
-
-    print("\nHere are the options you've selected:")
-    print(f"Objective: {objective}")
-    for tool, flag in tool_flags.items():
-        print(f"Use {tool}: {'Yes' if flag else 'No'}")
-    print(f"Iterations: {iterations}")
-    if document_path is not None:
-        print(f"Document: {document_path}")
-
-    correct_prompt = "Does this look correct? Type 1 for yes and 0 for no: "
-    correct = get_input(correct_prompt, type_=int, range_=(0, 1))
-
-    if correct:
-        print(Fore.GREEN + "\033[1mStarting INSIGHT with your options!\033[0m")
-    else:
-        prompt_user()  # Start over if the user is not satisfied
-
-    return objective, tool_flags, iterations, reload_path, document_path
+    # Should not reach here, but provide defaults
+    return "", {"MYGENE": True, "PUBMED": True, "MYVARIANT": False}, 5, None, None
