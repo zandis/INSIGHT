@@ -524,12 +524,13 @@ def execute_api_code(
     except ImportError as e:
         logger.error(f"Failed to import API wrapper for {tool}: {e}")
 
-    # Execute with validation disabled for imports (we control them)
+    # Execute with validation enabled - we allow API modules in ALLOWED_MODULES
+    # The code validator will permit imports from our trusted API wrappers
     return execute_safe(
         code=full_code,
         timeout_seconds=timeout_seconds,
         additional_globals=additional_globals,
-        validate=False  # We've constructed safe code
+        validate=True  # Validate even API code for safety
     )
 
 

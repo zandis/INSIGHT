@@ -51,28 +51,36 @@ class AuthManager:
         """Initialize auth manager."""
         self.secret_key = secret_key
 
+    # OWASP 2023 recommended minimum for PBKDF2-SHA256
+    PBKDF2_ITERATIONS = 310000
+
     def hash_password(self, password: str) -> str:
         """
-        Hash a password using PBKDF2.
+        Hash a password using PBKDF2-SHA256.
+
+        Uses OWASP 2023 recommended iteration count for PBKDF2.
 
         Args:
             password: Plain text password
 
         Returns:
-            Hashed password string
+            Hashed password string with version prefix
         """
         salt = secrets.token_hex(16)
         key = hashlib.pbkdf2_hmac(
             'sha256',
             password.encode('utf-8'),
             salt.encode('utf-8'),
-            100000
+            self.PBKDF2_ITERATIONS
         )
-        return f"{salt}${key.hex()}"
+        # Include version prefix for future algorithm upgrades
+        return f"v2${salt}${key.hex()}"
 
     def verify_password(self, password: str, password_hash: str) -> bool:
         """
         Verify a password against its hash.
+
+        Supports both legacy (v1/no version) and current (v2) hash formats.
 
         Args:
             password: Plain text password
@@ -82,15 +90,28 @@ class AuthManager:
             True if password matches
         """
         try:
-            salt, stored_key = password_hash.split('$')
+            parts = password_hash.split('$')
+
+            # Detect hash version
+            if parts[0] == 'v2':
+                # New format: v2$salt$hash
+                salt = parts[1]
+                stored_key = parts[2]
+                iterations = self.PBKDF2_ITERATIONS
+            else:
+                # Legacy format: salt$hash (100k iterations)
+                salt = parts[0]
+                stored_key = parts[1]
+                iterations = 100000
+
             key = hashlib.pbkdf2_hmac(
                 'sha256',
                 password.encode('utf-8'),
                 salt.encode('utf-8'),
-                100000
+                iterations
             )
             return hmac.compare_digest(key.hex(), stored_key)
-        except (ValueError, AttributeError):
+        except (ValueError, AttributeError, IndexError):
             return False
 
 
@@ -116,17 +137,30 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
     else:
         expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
 
-    to_encode.update({"exp": expire, "iat": datetime.utcnow()})
+    to_encode.update({"exp": expire.isoformat(), "iat": datetime.utcnow().isoformat()})
 
     if JOSE_AVAILABLE:
+        # Convert back to datetime for jose
+        to_encode["exp"] = expire
+        to_encode["iat"] = datetime.utcnow()
         encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     else:
-        # Simple fallback token
+        # Fallback with HMAC signing for security
         import base64
         import json
-        encoded_jwt = base64.urlsafe_b64encode(
-            json.dumps(to_encode, default=str).encode()
-        ).decode()
+
+        payload_bytes = json.dumps(to_encode, default=str).encode()
+        payload_b64 = base64.urlsafe_b64encode(payload_bytes).decode()
+
+        # Create HMAC signature
+        signature = hmac.new(
+            SECRET_KEY.encode(),
+            payload_bytes,
+            hashlib.sha256
+        ).hexdigest()
+
+        # Combine payload and signature
+        encoded_jwt = f"{payload_b64}.{signature}"
 
     return encoded_jwt
 
@@ -147,7 +181,28 @@ def decode_token(token: str) -> Optional[Dict[str, Any]]:
         else:
             import base64
             import json
-            payload = json.loads(base64.urlsafe_b64decode(token.encode()))
+
+            # Split token into payload and signature
+            parts = token.split('.')
+            if len(parts) != 2:
+                return None
+
+            payload_b64, received_signature = parts
+
+            # Decode payload
+            payload_bytes = base64.urlsafe_b64decode(payload_b64.encode())
+
+            # Verify HMAC signature
+            expected_signature = hmac.new(
+                SECRET_KEY.encode(),
+                payload_bytes,
+                hashlib.sha256
+            ).hexdigest()
+
+            if not hmac.compare_digest(received_signature, expected_signature):
+                return None
+
+            payload = json.loads(payload_bytes.decode())
 
             # Check expiration
             if "exp" in payload:

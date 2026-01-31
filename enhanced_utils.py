@@ -30,8 +30,9 @@ import asyncio
 import hashlib
 import json
 import re
+import threading
 import time
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from dataclasses import dataclass, field
 from datetime import datetime
 from functools import wraps
@@ -826,6 +827,7 @@ async def execute_tasks_concurrent(
 class AdaptiveRateLimiter:
     """
     Rate limiter that adapts based on API response patterns.
+    Thread-safe for both sync and async usage.
     """
 
     def __init__(
@@ -848,28 +850,56 @@ class AdaptiveRateLimiter:
         self._tokens = initial_rate
         self._last_update = time.time()
         self._success_streak = 0
-        self._lock = asyncio.Lock()
+        # Use threading lock for thread safety (works in both sync and async)
+        self._thread_lock = threading.RLock()
+        self._async_lock: Optional[asyncio.Lock] = None
 
-    async def acquire(self) -> bool:
+    def _get_async_lock(self) -> asyncio.Lock:
+        """Get or create async lock (lazy initialization for event loop)."""
+        if self._async_lock is None:
+            self._async_lock = asyncio.Lock()
+        return self._async_lock
+
+    def acquire_sync(self) -> bool:
         """
-        Acquire permission to make a request.
+        Synchronous acquire for thread-based usage.
 
         Returns:
             True if acquired, False if rate limited
         """
-        async with self._lock:
-            now = time.time()
-            elapsed = now - self._last_update
-            self._tokens = min(
-                self.current_rate,
-                self._tokens + elapsed * self.current_rate
-            )
-            self._last_update = now
+        with self._thread_lock:
+            return self._do_acquire()
 
-            if self._tokens >= 1:
-                self._tokens -= 1
-                return True
-            return False
+    async def acquire(self) -> bool:
+        """
+        Acquire permission to make a request (async).
+
+        Returns:
+            True if acquired, False if rate limited
+        """
+        async with self._get_async_lock():
+            with self._thread_lock:
+                return self._do_acquire()
+
+    def _do_acquire(self) -> bool:
+        """Internal acquire logic (caller must hold lock)."""
+        now = time.time()
+        elapsed = now - self._last_update
+        self._tokens = min(
+            self.current_rate,
+            self._tokens + elapsed * self.current_rate
+        )
+        self._last_update = now
+
+        if self._tokens >= 1:
+            self._tokens -= 1
+            return True
+        return False
+
+    def record_response_sync(self, status_code: int) -> None:
+        """Synchronous response recording."""
+        with self._thread_lock:
+            self._do_record_response(status_code)
 
     async def record_response(self, status_code: int) -> None:
         """
@@ -878,26 +908,32 @@ class AdaptiveRateLimiter:
         Args:
             status_code: HTTP status code of response
         """
-        async with self._lock:
-            if status_code == 429:  # Rate limited
-                self.current_rate = max(self.min_rate, self.current_rate * 0.5)
-                self._success_streak = 0
-                logger.warning(f"Rate limited, reducing rate to {self.current_rate:.1f}/s")
+        async with self._get_async_lock():
+            with self._thread_lock:
+                self._do_record_response(status_code)
 
-            elif status_code >= 500:  # Server error
-                self.current_rate = max(self.min_rate, self.current_rate * 0.75)
-                self._success_streak = 0
+    def _do_record_response(self, status_code: int) -> None:
+        """Internal response recording (caller must hold lock)."""
+        if status_code == 429:  # Rate limited
+            self.current_rate = max(self.min_rate, self.current_rate * 0.5)
+            self._success_streak = 0
+            logger.warning(f"Rate limited, reducing rate to {self.current_rate:.1f}/s")
 
-            elif 200 <= status_code < 300:  # Success
-                self._success_streak += 1
-                if self._success_streak >= 10:
-                    self.current_rate = min(self.max_rate, self.current_rate * 1.1)
-                    self._success_streak = 0
-                    logger.debug(f"Increasing rate to {self.current_rate:.1f}/s")
+        elif status_code >= 500:  # Server error
+            self.current_rate = max(self.min_rate, self.current_rate * 0.75)
+            self._success_streak = 0
+
+        elif 200 <= status_code < 300:  # Success
+            self._success_streak += 1
+            if self._success_streak >= 10:
+                self.current_rate = min(self.max_rate, self.current_rate * 1.1)
+                self._success_streak = 0
+                logger.debug(f"Increasing rate to {self.current_rate:.1f}/s")
 
     def get_current_rate(self) -> float:
         """Get current rate limit."""
-        return self.current_rate
+        with self._thread_lock:
+            return self.current_rate
 
 
 # =============================================================================
@@ -1144,8 +1180,11 @@ class Checkpoint:
 
 class SessionCheckpoint:
     """
-    Manage session checkpoints for recovery.
+    Manage session checkpoints for recovery with LRU eviction.
     """
+
+    # Maximum in-memory checkpoints to prevent memory leaks
+    MAX_MEMORY_CHECKPOINTS = 50
 
     def __init__(self, storage_path: str = ".checkpoints"):
         """
@@ -1155,10 +1194,19 @@ class SessionCheckpoint:
             storage_path: Directory for storing checkpoints
         """
         self.storage_path = storage_path
-        self._checkpoints: Dict[str, Checkpoint] = {}
+        # Use OrderedDict for LRU eviction
+        self._checkpoints: OrderedDict[str, Checkpoint] = OrderedDict()
 
         import os
         os.makedirs(storage_path, exist_ok=True)
+
+    def _evict_if_needed(self) -> None:
+        """Evict oldest checkpoints if over limit."""
+        while len(self._checkpoints) >= self.MAX_MEMORY_CHECKPOINTS:
+            # Remove oldest (first item in OrderedDict)
+            oldest_id = next(iter(self._checkpoints))
+            del self._checkpoints[oldest_id]
+            logger.debug(f"Evicted checkpoint {oldest_id} from memory")
 
     def create_checkpoint(
         self,
@@ -1175,6 +1223,9 @@ class SessionCheckpoint:
         Returns:
             Checkpoint ID
         """
+        # Evict old checkpoints from memory if needed
+        self._evict_if_needed()
+
         checkpoint_id = hashlib.md5(
             f"{datetime.utcnow().isoformat()}{label}".encode()
         ).hexdigest()[:12]
@@ -1189,7 +1240,7 @@ class SessionCheckpoint:
 
         self._checkpoints[checkpoint_id] = checkpoint
 
-        # Save to disk
+        # Save to disk (persistent storage)
         self._save_checkpoint(checkpoint)
 
         logger.info(f"Created checkpoint {checkpoint_id} ({label})")
@@ -1787,33 +1838,41 @@ def _convert_type(value: str, target_type: str) -> Any:
 
 
 # =============================================================================
-# Global instances
+# Global instances (thread-safe singletons)
 # =============================================================================
 
 _profiler: Optional[InsightProfiler] = None
 _lineage_tracker: Optional[DataLineageTracker] = None
 _checkpoint_manager: Optional[SessionCheckpoint] = None
+_singleton_lock = threading.RLock()
 
 
 def get_profiler() -> InsightProfiler:
-    """Get global profiler instance."""
+    """Get global profiler instance (thread-safe)."""
     global _profiler
     if _profiler is None:
-        _profiler = InsightProfiler()
+        with _singleton_lock:
+            # Double-check pattern
+            if _profiler is None:
+                _profiler = InsightProfiler()
     return _profiler
 
 
 def get_lineage_tracker() -> DataLineageTracker:
-    """Get global lineage tracker instance."""
+    """Get global lineage tracker instance (thread-safe)."""
     global _lineage_tracker
     if _lineage_tracker is None:
-        _lineage_tracker = DataLineageTracker()
+        with _singleton_lock:
+            if _lineage_tracker is None:
+                _lineage_tracker = DataLineageTracker()
     return _lineage_tracker
 
 
 def get_checkpoint_manager(storage_path: str = ".checkpoints") -> SessionCheckpoint:
-    """Get global checkpoint manager instance."""
+    """Get global checkpoint manager instance (thread-safe)."""
     global _checkpoint_manager
     if _checkpoint_manager is None:
-        _checkpoint_manager = SessionCheckpoint(storage_path)
+        with _singleton_lock:
+            if _checkpoint_manager is None:
+                _checkpoint_manager = SessionCheckpoint(storage_path)
     return _checkpoint_manager

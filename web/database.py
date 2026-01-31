@@ -9,6 +9,7 @@ Provides SQLite-based persistence for:
 - Favorites and search history
 """
 
+import asyncio
 import aiosqlite
 import json
 import os
@@ -83,9 +84,13 @@ class Webhook:
 
 class Database:
     """
-    Async SQLite database manager.
+    Async SQLite database manager with connection management.
 
     Provides CRUD operations for all application data.
+    Features:
+    - Lazy connection initialization
+    - Connection health checks
+    - Proper cleanup
     """
 
     def __init__(self, db_path: str = "insight.db"):
@@ -97,23 +102,50 @@ class Database:
         """
         self.db_path = db_path
         self._connection: Optional[aiosqlite.Connection] = None
+        self._lock = asyncio.Lock()
 
     async def connect(self) -> None:
-        """Establish database connection."""
-        self._connection = await aiosqlite.connect(self.db_path)
-        self._connection.row_factory = aiosqlite.Row
+        """Establish database connection with locking."""
+        async with self._lock:
+            if self._connection is not None:
+                # Check if connection is still valid
+                try:
+                    await self._connection.execute("SELECT 1")
+                    return  # Connection is valid
+                except Exception:
+                    # Connection is stale, close it
+                    try:
+                        await self._connection.close()
+                    except Exception:
+                        pass
+                    self._connection = None
+
+            self._connection = await aiosqlite.connect(self.db_path)
+            self._connection.row_factory = aiosqlite.Row
 
     async def disconnect(self) -> None:
-        """Close database connection."""
-        if self._connection:
-            await self._connection.close()
-            self._connection = None
+        """Close database connection safely."""
+        async with self._lock:
+            if self._connection:
+                try:
+                    await self._connection.close()
+                except Exception:
+                    pass
+                finally:
+                    self._connection = None
 
     async def execute(self, query: str, params: tuple = ()) -> aiosqlite.Cursor:
-        """Execute a query."""
+        """Execute a query with connection management."""
         if not self._connection:
             await self.connect()
-        return await self._connection.execute(query, params)
+        try:
+            return await self._connection.execute(query, params)
+        except aiosqlite.OperationalError as e:
+            # Connection may have been lost, try to reconnect once
+            if "no such table" not in str(e).lower():
+                await self.connect()
+                return await self._connection.execute(query, params)
+            raise
 
     async def commit(self) -> None:
         """Commit transaction."""

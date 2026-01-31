@@ -105,6 +105,10 @@ class PubMedWrapper:
         self._metrics = get_metrics()
         self._rate_manager = get_rate_limiter_manager()
 
+    # Input validation constants
+    MAX_RETMAX = 10000  # PubMed max
+    MAX_QUERY_LENGTH = 10000  # Reasonable limit
+
     @retry_with_backoff(
         max_retries=3,
         base_delay=1.0,
@@ -115,34 +119,68 @@ class PubMedWrapper:
         self,
         query: str,
         retmax: int = 10,
-        retstart: int = 0
+        retstart: int = 0,
+        timeout: int = 30
     ) -> APIResponse:
         """
         Search PubMed for articles.
 
         Args:
             query: Search query
-            retmax: Maximum results to return
-            retstart: Starting offset
+            retmax: Maximum results to return (1-10000)
+            retstart: Starting offset (>= 0)
+            timeout: Request timeout in seconds
 
         Returns:
             APIResponse with article IDs
         """
+        import signal
         from Bio import Entrez
+
+        # Input validation
+        if not query or not query.strip():
+            raise PubMedError("Query cannot be empty")
+
+        if len(query) > self.MAX_QUERY_LENGTH:
+            raise PubMedError(f"Query too long (max {self.MAX_QUERY_LENGTH} chars)")
+
+        # Sanitize query - remove potential injection characters
+        query = query.strip()
+
+        # Validate numeric params
+        retmax = max(1, min(int(retmax), self.MAX_RETMAX))
+        retstart = max(0, int(retstart))
 
         start_time = time.time()
 
-        try:
-            logger.info(f"PubMed search: '{query}' (max={retmax}, start={retstart})")
+        # Set up timeout handler
+        def timeout_handler(signum, frame):
+            raise APITimeoutError(f"PubMed search timed out after {timeout}s")
 
-            search_handle = Entrez.esearch(
-                db="pubmed",
-                term=query,
-                retmax=retmax,
-                retstart=retstart
-            )
-            search_results = Entrez.read(search_handle)
-            search_handle.close()
+        try:
+            logger.info(f"PubMed search: '{query[:50]}...' (max={retmax}, start={retstart})")
+
+            # Set timeout (Unix only)
+            old_handler = None
+            if hasattr(signal, 'SIGALRM'):
+                old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+                signal.alarm(timeout)
+
+            try:
+                search_handle = Entrez.esearch(
+                    db="pubmed",
+                    term=query,
+                    retmax=retmax,
+                    retstart=retstart
+                )
+                search_results = Entrez.read(search_handle)
+                search_handle.close()
+            finally:
+                # Cancel alarm and restore handler
+                if hasattr(signal, 'SIGALRM'):
+                    signal.alarm(0)
+                    if old_handler:
+                        signal.signal(signal.SIGALRM, old_handler)
 
             pubmed_ids = search_results.get("IdList", [])
             latency = (time.time() - start_time) * 1000

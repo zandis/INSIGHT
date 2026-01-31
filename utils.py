@@ -176,7 +176,7 @@ def execute_python(code: str) -> Optional[Any]:
     """
     Execute Python code and return the result.
 
-    Uses safe execution with timeout protection when available.
+    Uses safe execution with timeout protection and validation.
     The code should define a 'ret' variable containing the result.
 
     Args:
@@ -185,36 +185,52 @@ def execute_python(code: str) -> Optional[Any]:
     Returns:
         Value of 'ret' variable if execution succeeded, None otherwise
     """
-    # Try to use safe execution if available
+    # Always use safe execution - no fallback to unsafe exec()
     try:
-        from safe_executor import execute_safe
-        result = execute_safe(code, timeout_seconds=60, validate=False)
+        from safe_executor import execute_safe, execute_api_code
+
+        # Detect if this is an API wrapper code
+        is_api_code = any(
+            wrapper in code for wrapper in
+            ["mygene_wrapper", "myvariant_wrapper", "pubmed_wrapper"]
+        )
+
+        if is_api_code:
+            # Use API-specific executor with controlled validation
+            tool = None
+            if "mygene_wrapper" in code:
+                tool = "MYGENE"
+            elif "myvariant_wrapper" in code:
+                tool = "MYVARIANT"
+            elif "pubmed_wrapper" in code:
+                tool = "PUBMED"
+
+            if tool:
+                # Extract just the parameter code (before the wrapper import)
+                lines = code.split('\n')
+                param_lines = [l for l in lines if not l.startswith('from api.') and 'wrapper' not in l and l.strip()]
+                param_code = '\n'.join(param_lines)
+                result = execute_api_code(param_code, tool, timeout_seconds=60)
+            else:
+                result = execute_safe(code, timeout_seconds=60, validate=True)
+        else:
+            # Use regular safe execution with validation enabled
+            result = execute_safe(code, timeout_seconds=60, validate=True)
+
         if result.success:
             return result.result
         else:
             logger.error(f"Code execution failed: {result.error}")
+            if result.stderr:
+                logger.debug(f"stderr: {result.stderr}")
             return None
-    except ImportError:
-        pass
 
-    # Fallback to direct execution
-    loc = {}
-    try:
-        exec(code, globals(), loc)
-    except SyntaxError as e:
-        logger.error(f"Syntax error in code: {e}")
-        return None
-    except NameError as e:
-        logger.error(f"Name error executing code: {e}")
-        return None
-    except TypeError as e:
-        logger.error(f"Type error executing code: {e}")
+    except ImportError as e:
+        logger.error(f"Safe executor not available: {e}. Refusing to execute code unsafely.")
         return None
     except Exception as e:
-        logger.error(f"Exception executing code: {e}")
+        logger.error(f"Exception during safe execution: {e}")
         return None
-
-    return loc.get("ret")
 
 
 def process_myvariant_result(results):
@@ -460,19 +476,24 @@ def get_code_params(code: str, preparam_text: str, postparam_text: str):
 
 
 def validate_llm_response(goal, response):
-    validation_prompt = f"I gave an LLM this goal: '{goal}' and it gave this response: '{response}'. Is this reasonable, or did something go wrong? [yes|no]"
-    validation_response = (
-        openai.Completion.create(
-            engine="text-davinci-003", prompt=validation_prompt, temperature=0.0
-        )
-        .choices[0]
-        .text.strip()
-    )
+    """Validate LLM response using modern chat API."""
+    validation_prompt = f"I gave an LLM this goal: '{goal}' and it gave this response: '{response}'. Is this reasonable, or did something go wrong? Reply with only 'yes' or 'no'."
 
-    if validation_response.lower() == "yes":
+    try:
+        validation_response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a validation assistant. Reply with only 'yes' or 'no'."},
+                {"role": "user", "content": validation_prompt}
+            ],
+            temperature=0.0,
+            max_tokens=10
+        ).choices[0]["message"]["content"].strip().lower()
+
+        return validation_response == "yes"
+    except Exception as e:
+        logger.warning(f"LLM validation failed: {e}, defaulting to True")
         return True
-    else:
-        return False
 
 
 def generate_tool_prompt(task):
@@ -732,17 +753,16 @@ def create_index(api_key,summaries=[], temperature=0.0, model_name="gpt-3.5-turb
     return GPTVectorStoreIndex(documents, service_context=service_context)
 
 
-def create_graph_index(api_key, indicies=[], summaries=[], temperature=0.0, model_name="text-davinci-003", max_tokens=2000):
+def create_graph_index(api_key, indicies=[], summaries=[], temperature=0.0, model_name="gpt-3.5-turbo", max_tokens=2000):
     llm_predictor = LLMPredictor(
-        llm=OpenAI(
+        llm=ChatOpenAI(
             temperature=temperature,
             openai_api_key=api_key,
             model_name=model_name,
             max_tokens=max_tokens,
-            )
+        )
     )
     service_context = ServiceContext.from_defaults(llm_predictor=llm_predictor)
-
 
     graph = ComposableGraph.from_indices(
         GPTListIndex,
@@ -754,20 +774,20 @@ def create_graph_index(api_key, indicies=[], summaries=[], temperature=0.0, mode
     return graph
 
 
-def create_list_index(api_key, summaries=[], temperature=0.0, model_name="text-davinci-003", max_tokens=2000):
+def create_list_index(api_key, summaries=[], temperature=0.0, model_name="gpt-3.5-turbo", max_tokens=2000):
     llm_predictor = LLMPredictor(
-        llm=OpenAI(
+        llm=ChatOpenAI(
             temperature=temperature,
             openai_api_key=api_key,
             model_name=model_name,
             max_tokens=max_tokens,
-            )
+        )
     )
     service_context = ServiceContext.from_defaults(llm_predictor=llm_predictor)
     documents = []
     for i, summary in enumerate(summaries):
         documents.append(Document(text=summary, doc_id=str(i)))
-        
+
     index = GPTListIndex.from_documents(documents, service_context=service_context)
     return index
 

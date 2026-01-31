@@ -8,7 +8,6 @@ and other expensive computations to improve performance.
 import hashlib
 import json
 import os
-import pickle
 import threading
 import time
 from collections import OrderedDict
@@ -139,8 +138,9 @@ class LRUCache(Generic[T]):
             # Add new entry
             entry = CacheEntry(value=value)
             try:
-                entry.size_bytes = len(pickle.dumps(value))
-            except (TypeError, pickle.PicklingError):
+                # Estimate size using JSON (safer than pickle)
+                entry.size_bytes = len(json.dumps(value, default=str).encode())
+            except (TypeError, ValueError):
                 entry.size_bytes = 0
 
             self._cache[key] = entry
@@ -306,12 +306,13 @@ class EmbeddingCache:
         return embedding
 
     def save_to_disk(self) -> None:
-        """Persist cache to disk."""
+        """Persist cache to disk using JSON (safer than pickle)."""
         if not self._persist_path:
             return
 
         try:
-            path = Path(self._persist_path)
+            # Use .json extension for safety
+            path = Path(self._persist_path).with_suffix('.json')
             path.parent.mkdir(parents=True, exist_ok=True)
 
             with self._cache._lock:
@@ -320,41 +321,61 @@ class EmbeddingCache:
                     for key, entry in self._cache._cache.items()
                 }
 
-            with open(path, "wb") as f:
-                pickle.dump(data, f)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f)
 
-            logger.info(f"Saved {len(data)} embeddings to {self._persist_path}")
+            logger.info(f"Saved {len(data)} embeddings to {path}")
 
         except Exception as e:
             logger.error(f"Failed to save embedding cache: {e}")
 
     def _load_from_disk(self) -> None:
-        """Load cache from disk."""
+        """Load cache from disk using JSON."""
         if not self._persist_path:
             return
 
-        path = Path(self._persist_path)
-        if not path.exists():
+        # Try JSON first (new format), then fallback to legacy pickle
+        json_path = Path(self._persist_path).with_suffix('.json')
+        pickle_path = Path(self._persist_path)
+
+        data = None
+
+        # Try JSON format first (secure)
+        if json_path.exists():
+            try:
+                with open(json_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                logger.info(f"Loaded cache from JSON: {json_path}")
+            except (json.JSONDecodeError, IOError) as e:
+                logger.warning(f"Failed to load JSON cache: {e}")
+
+        # Migrate from legacy pickle if JSON doesn't exist (read-only for migration)
+        elif pickle_path.exists() and pickle_path.suffix == '.pkl':
+            logger.warning(
+                f"Legacy pickle cache found at {pickle_path}. "
+                "Please manually review and delete after migration."
+            )
+            # Skip loading pickle for security - require manual migration
             return
 
-        try:
-            with open(path, "rb") as f:
-                data = pickle.load(f)
+        if data is None:
+            return
 
-            loaded = 0
-            for key, entry_data in data.items():
-                entry = CacheEntry(
-                    value=entry_data["value"],
-                    created_at=entry_data.get("created_at", time.time())
-                )
-                if not entry.is_expired(self._cache._ttl_seconds):
-                    self._cache._cache[key] = entry
-                    loaded += 1
+        loaded = 0
+        for key, entry_data in data.items():
+            # Validate entry structure
+            if not isinstance(entry_data, dict) or "value" not in entry_data:
+                continue
 
-            logger.info(f"Loaded {loaded} embeddings from {self._persist_path}")
+            entry = CacheEntry(
+                value=entry_data["value"],
+                created_at=entry_data.get("created_at", time.time())
+            )
+            if not entry.is_expired(self._cache._ttl_seconds):
+                self._cache._cache[key] = entry
+                loaded += 1
 
-        except Exception as e:
-            logger.error(f"Failed to load embedding cache: {e}")
+        logger.info(f"Loaded {loaded} embeddings from cache")
 
     def get_stats(self) -> Dict[str, Any]:
         """Get cache statistics."""
