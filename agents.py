@@ -1,26 +1,69 @@
+"""
+Agent implementations for INSIGHT.
+
+This module provides the boss and worker agents that orchestrate
+the research workflow using LLM-powered task planning and execution.
+"""
+
 import os
 from ast import literal_eval
 from collections import deque
-from typing import List
+from typing import Any, Deque, Dict, List, Optional, Tuple, Union
+
 from colorama import Fore
 
 import openai
 
 from config import OPENAI_API_KEY
-from utils import generate_tool_prompt, get_gpt_chat_completion, get_gpt_completion, query_knowledge_base
+from utils import (
+    generate_tool_prompt,
+    get_gpt_chat_completion,
+    get_gpt_completion,
+    query_knowledge_base,
+)
 
-openai.api_key = OPENAI_API_KEY or os.environ["OPENAI_API_KEY"]
+# Import enhanced modules if available
+try:
+    from logging_config import get_logger
+    from metrics import get_metrics
+    ENHANCED_MODE = True
+    logger = get_logger("agents")
+except ImportError:
+    import logging
+    ENHANCED_MODE = False
+    logger = logging.getLogger(__name__)
+
+# Initialize API key
+openai.api_key = OPENAI_API_KEY or os.environ.get("OPENAI_API_KEY", "")
 
 
 def boss_agent(
     objective: str,
     tool_description: str,
-    task_list: List[str],
+    task_list: Union[List[str], Deque[str]],
     summaries: List[str],
     completed_tasks: List[str],
-    previous_task="",
-    previous_result = None
-):
+    previous_task: str = "",
+    previous_result: Optional[Any] = None
+) -> Deque[str]:
+    """
+    Boss agent that plans and prioritizes research tasks.
+
+    The boss agent breaks down the high-level objective into manageable
+    tasks for worker agents, considering completed work and available tools.
+
+    Args:
+        objective: The high-level research objective
+        tool_description: Description of available tools
+        task_list: Current pending tasks
+        summaries: Executive summaries of completed work
+        completed_tasks: List of completed task descriptions
+        previous_task: Most recently completed task
+        previous_result: Result from the most recent task
+
+    Returns:
+        Deque of prioritized tasks to execute
+    """
     
     no_result_notification = ""
     if not previous_result and previous_task:
@@ -98,11 +141,27 @@ Note: If a task has already been completed, do not write that same task again in
 def worker_agent(
     objective: str,
     task: str,
-    index,
-    cache,
-    TOOLS,
-):
-    
+    index: Any,
+    cache: Dict[str, List[str]],
+    TOOLS: List[str],
+) -> Tuple[str, bool]:
+    """
+    Worker agent that executes individual research tasks.
+
+    The worker agent takes a task from the boss and executes it using
+    the appropriate tool (API wrapper) or general knowledge.
+
+    Args:
+        objective: The high-level research objective for context
+        task: The specific task to execute
+        index: The LlamaIndex knowledge base for context retrieval
+        cache: Cache of previous API call parameters
+        TOOLS: List of available tool names
+
+    Returns:
+        Tuple of (result_string, is_python_code) where is_python_code
+        indicates if the result is API wrapper code to execute
+    """
     result_is_python = False
     context = ""
     previous_params = ""

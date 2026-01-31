@@ -1,8 +1,15 @@
+"""
+INSIGHT - Autonomous AI System for Medical Research.
+
+This module provides the main entry point and orchestration for the
+multi-agent research system.
+"""
+
 import logging
-import math
 import os
 import time
 from collections import defaultdict, deque
+from typing import Any, Deque, Dict, List, Optional, Tuple
 
 from Bio import Entrez
 from colorama import Fore, Style
@@ -12,23 +19,45 @@ from agents import boss_agent, worker_agent
 from config import EMAIL, OPENAI_API_KEY
 from interface import prompt_user
 from utils import (
+    create_index,
     get_key_results,
+    handle_python_result,
+    handle_results,
     insert_doc_llama_index,
     load,
     query_knowledge_base,
-    save,
-    handle_python_result,
-    handle_results,
-    create_index,
     read_file,
+    save,
     select_task,
 )
 
+# Import enhanced modules if available
+try:
+    from logging_config import get_logger
+    from metrics import get_metrics, ProgressTracker
+    from shutdown_handler import register_cleanup, get_state_preserver
+    from health_check import quick_health_check
+    ENHANCED_MODE = True
+    logger = get_logger("main")
+except ImportError:
+    ENHANCED_MODE = False
+    logger = logging.getLogger(__name__)
+
+# Suppress noisy third-party loggers
 logging.getLogger("llama_index").setLevel(logging.WARNING)
 
+# Configure Entrez email for PubMed API
 Entrez.email = EMAIL
-MAX_TOKENS = 4097
-api_key = OPENAI_API_KEY or os.environ["OPENAI_API_KEY"]
+
+# Constants
+MAX_TOKENS: int = 4097
+DEFAULT_RESULT_CUTOFF: int = 20000
+DEFAULT_TOOLS: List[str] = ["MYGENE", "PUBMED", "MYVARIANT"]
+
+# Initialize API key with validation
+api_key = OPENAI_API_KEY or os.environ.get("OPENAI_API_KEY", "")
+if not api_key:
+    logger.warning("OpenAI API key not configured")
 
 
 def run_(
@@ -102,20 +131,47 @@ def run_(
 
 
 def run(
-    api_key,
-    OBJECTIVE="",
-    RESULT_CUTOFF=20000,
-    MAX_ITERATIONS=1,
-    TOOLS=["MYGENE", "PUBMED", "MYVARIANT"],
-    master_index=None,
-    task_id_counter=1,
-    task_list=deque(),
-    completed_tasks=[],
-    cache=defaultdict(list),
-    current_datetime="",
-    reload_path="",
-    my_data_path="",
-):
+    api_key: str,
+    OBJECTIVE: str = "",
+    RESULT_CUTOFF: int = DEFAULT_RESULT_CUTOFF,
+    MAX_ITERATIONS: int = 1,
+    TOOLS: Optional[List[str]] = None,
+    master_index: Optional[Any] = None,
+    task_id_counter: int = 1,
+    task_list: Optional[Deque[str]] = None,
+    completed_tasks: Optional[List[str]] = None,
+    cache: Optional[Dict[str, List]] = None,
+    current_datetime: str = "",
+    reload_path: str = "",
+    my_data_path: str = "",
+) -> None:
+    """
+    Run the INSIGHT research loop.
+
+    Args:
+        api_key: OpenAI API key
+        OBJECTIVE: Research objective description
+        RESULT_CUTOFF: Maximum result size in characters
+        MAX_ITERATIONS: Number of research iterations
+        TOOLS: List of tools to use (MYGENE, PUBMED, MYVARIANT)
+        master_index: Existing LlamaIndex to use
+        task_id_counter: Starting task ID
+        task_list: Pre-existing task queue
+        completed_tasks: Pre-existing completed tasks
+        cache: Pre-existing cache
+        current_datetime: Session timestamp
+        reload_path: Path to reload previous session from
+        my_data_path: Path to user data file to incorporate
+    """
+    # Initialize mutable defaults
+    if TOOLS is None:
+        TOOLS = list(DEFAULT_TOOLS)
+    if task_list is None:
+        task_list = deque()
+    if completed_tasks is None:
+        completed_tasks = []
+    if cache is None:
+        cache = defaultdict(list)
     start_time = time.time()
     reload_count = 0
     summaries = []

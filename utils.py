@@ -1,3 +1,14 @@
+"""
+Utility functions for INSIGHT.
+
+This module provides core utilities for:
+- LLM interactions (GPT completions, embeddings)
+- Document indexing and retrieval
+- Result processing for biomedical APIs
+- File I/O operations
+- State persistence
+"""
+
 import json
 import logging
 import os
@@ -6,44 +17,68 @@ import time
 import xml.etree.ElementTree as ET
 from collections import defaultdict, deque
 from functools import partial
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import backoff
-import llama_index
 import markdown
 import openai
 import tiktoken
 from colorama import Fore
 from langchain import OpenAI
 from langchain.chat_models import ChatOpenAI
-from llama_index import Document, GPTVectorStoreIndex, LLMPredictor, ServiceContext, GPTListIndex
-from llama_index.indices.composability import ComposableGraph
-from llama_index.retrievers import VectorIndexRetriever
-from llama_index.query_engine import RetrieverQueryEngine
-from llama_index import StorageContext, load_index_from_storage, ServiceContext
-
 from llama_index import (
-    VectorStoreIndex,
+    Document,
+    GPTListIndex,
+    GPTVectorStoreIndex,
+    LLMPredictor,
     ResponseSynthesizer,
+    ServiceContext,
+    StorageContext,
+    VectorStoreIndex,
+    load_index_from_storage,
 )
-
+from llama_index.indices.composability import ComposableGraph
+from llama_index.query_engine import RetrieverQueryEngine
+from llama_index.retrievers import VectorIndexRetriever
 
 from api.mygene_api import mygene_api
-from api.pubmed_api import pubmed_api
 from api.myvariant_api import myvariant_api
+from api.pubmed_api import pubmed_api
 from config import OPENAI_API_KEY
 
+# Import new modules for enhanced functionality
+try:
+    from cache import get_cache_manager
+    from logging_config import get_logger
+    from metrics import get_metrics
+    from text_processing import TokenCounter, prepare_for_embedding
+    ENHANCED_MODE = True
+    logger = get_logger("utils")
+except ImportError:
+    ENHANCED_MODE = False
+    logger = logging.getLogger(__name__)
+
+# Suppress noisy third-party loggers
 logging.getLogger("llama_index").setLevel(logging.WARNING)
 
-#file_handler = logging.FileHandler('utils.log')
-# Configure the logging settings
-#logging.basicConfig(level=logging.INFO, handlers=[file_handler])
+# Constants
+MAX_TOKENS: int = 4097
+ADA_EMBEDDING_MAX_SIZE: int = 8191
+MAX_GENERIF_ENTRIES: int = 20
 
+# API info mapping for tool prompts
+api_info_mapping: Dict[str, str] = {
+    "mygene": mygene_api,
+    "PubMed": pubmed_api,
+    "myvariant": myvariant_api
+}
 
-MAX_TOKENS = 4097
-api_info_mapping = {"mygene": mygene_api, "PubMed": pubmed_api, "myvariant": myvariant_api}
-
-api_key = OPENAI_API_KEY or os.environ["OPENAI_API_KEY"]
-openai.api_key = api_key
+# Initialize API key with proper error handling
+api_key = OPENAI_API_KEY or os.environ.get("OPENAI_API_KEY", "")
+if api_key:
+    openai.api_key = api_key
+else:
+    logger.warning("OpenAI API key not configured - some features may not work")
 
 
 def get_input(prompt, type_=None, min_=None, max_=None, range_=None):
@@ -137,17 +172,49 @@ def get_max_completion_len(prompt):
     return MAX_TOKENS - tokens
 
 
-def execute_python(code: str):
-    # ret is defined in the code string
+def execute_python(code: str) -> Optional[Any]:
+    """
+    Execute Python code and return the result.
+
+    Uses safe execution with timeout protection when available.
+    The code should define a 'ret' variable containing the result.
+
+    Args:
+        code: Python code string to execute
+
+    Returns:
+        Value of 'ret' variable if execution succeeded, None otherwise
+    """
+    # Try to use safe execution if available
+    try:
+        from safe_executor import execute_safe
+        result = execute_safe(code, timeout_seconds=60, validate=False)
+        if result.success:
+            return result.result
+        else:
+            logger.error(f"Code execution failed: {result.error}")
+            return None
+    except ImportError:
+        pass
+
+    # Fallback to direct execution
     loc = {}
     try:
         exec(code, globals(), loc)
-
+    except SyntaxError as e:
+        logger.error(f"Syntax error in code: {e}")
+        return None
+    except NameError as e:
+        logger.error(f"Name error executing code: {e}")
+        return None
+    except TypeError as e:
+        logger.error(f"Type error executing code: {e}")
+        return None
     except Exception as e:
-        print(f"Exception executing code {code}, {e}")
-        return
+        logger.error(f"Exception executing code: {e}")
+        return None
 
-    return loc["ret"]
+    return loc.get("ret")
 
 
 def process_myvariant_result(results):
@@ -297,53 +364,80 @@ def process_mygene_result(results):
     return processed_result
 
 
-def process_pubmed_result(result):
+def process_pubmed_result(result: Union[str, List]) -> List[Tuple[str, Dict[str, str]]]:
+    """
+    Process PubMed XML result into structured documents.
+
+    Args:
+        result: XML string or list of results from PubMed API
+
+    Returns:
+        List of tuples containing (content, metadata) for each article
+    """
     try:
         root = ET.fromstring(result)
-    except Exception as e:
-        print(f"Cannot parse pubmed result, expected xml. {e}")
-        print("Adding whole document. Note this will lead to suboptimal results.")
-        return result if isinstance(result, list) else [result]
-    
+    except ET.ParseError as e:
+        logger.warning(f"Cannot parse pubmed result as XML: {e}")
+        logger.warning("Adding whole document. Note this will lead to suboptimal results.")
+        return [(result, {"citation_data": ""})] if isinstance(result, str) else [(str(r), {"citation_data": ""}) for r in result]
+    except TypeError as e:
+        logger.error(f"Invalid result type for PubMed parsing: {type(result)}")
+        return []
+
     processed_result = []
 
     for article in root:
         res_ = ""
         citation_data = ""
         for title in article.iter("Title"):
-            res_ += f"{title.text}\n"
-            citation_data += f"{title.text}\n"
+            if title.text:
+                res_ += f"{title.text}\n"
+                citation_data += f"{title.text}\n"
         for abstract in article.iter("AbstractText"):
-            res_ += f"{abstract.text}\n"
+            if abstract.text:
+                res_ += f"{abstract.text}\n"
         for author in article.iter("Author"):
             try:
-                citation_data += f"{author.find('LastName').text}"
-                citation_data += f", {author.find('ForeName').text}\n"
-            except:
-                pass
+                last_name = author.find('LastName')
+                fore_name = author.find('ForeName')
+                if last_name is not None and last_name.text:
+                    citation_data += f"{last_name.text}"
+                    if fore_name is not None and fore_name.text:
+                        citation_data += f", {fore_name.text}"
+                    citation_data += "\n"
+            except AttributeError as e:
+                logger.debug(f"Could not parse author info: {e}")
         for journal in article.iter("Journal"):
-            res_ += f"{journal.find('Title').text}\n"
-            citation_data += f"{journal.find('Title').text}\n"
+            journal_title = journal.find('Title')
+            if journal_title is not None and journal_title.text:
+                res_ += f"{journal_title.text}\n"
+                citation_data += f"{journal_title.text}\n"
         for volume in article.iter("Volume"):
-            citation_data += f"{volume.text}\n"
+            if volume.text:
+                citation_data += f"{volume.text}\n"
         for issue in article.iter("Issue"):
-            citation_data += f"{issue.text}\n"
+            if issue.text:
+                citation_data += f"{issue.text}\n"
         for pubdate in article.iter("PubDate"):
             try:
-                year = pubdate.find("Year").text
-                citation_data += f"{year}"
-                month = pubdate.find("Month").text
-                citation_data += f"-{month}"
-                day = pubdate.find("Day").text
-                citation_data += f"-{day}\n"
-            except:
-                pass
+                year_elem = pubdate.find("Year")
+                if year_elem is not None and year_elem.text:
+                    citation_data += f"{year_elem.text}"
+                    month_elem = pubdate.find("Month")
+                    if month_elem is not None and month_elem.text:
+                        citation_data += f"-{month_elem.text}"
+                    day_elem = pubdate.find("Day")
+                    if day_elem is not None and day_elem.text:
+                        citation_data += f"-{day_elem.text}"
+                    citation_data += "\n"
+            except AttributeError as e:
+                logger.debug(f"Could not parse publication date: {e}")
         for doi in article.iter("ELocationID"):
-            if doi.get("EIdType") == "doi":
+            if doi.get("EIdType") == "doi" and doi.text:
                 res_ += f"{doi.text}\n"
 
         if res_:
-            processed_result.append((res_,{"citation_data": citation_data}))
+            processed_result.append((res_, {"citation_data": citation_data}))
 
     return processed_result
 
@@ -407,16 +501,72 @@ You should change the parameters to fit your specific task.
     return prompt
 
 
-def get_ada_embedding(text):
-    ada_embedding_max_size = 8191
-    text = text.replace("\n", " ")
+def get_ada_embedding(text: str) -> List[float]:
+    """
+    Get Ada embedding for text with caching support.
 
-    if num_tokens_from_string(text) > ada_embedding_max_size:
-        # There must be a better way to do this.
-        text = text[:ada_embedding_max_size]
-    return openai.Embedding.create(input=[text], model="text-embedding-ada-002")[
-        "data"
-    ][0]["embedding"]
+    Uses embedding cache to avoid redundant API calls for identical text.
+    Properly truncates text using token counting rather than character counting.
+
+    Args:
+        text: Text to embed
+
+    Returns:
+        List of floats representing the embedding vector
+    """
+    # Clean and prepare text
+    text = text.replace("\n", " ").strip()
+
+    if not text:
+        logger.warning("Empty text provided for embedding")
+        return []
+
+    # Use smart truncation if text is too long
+    token_count = num_tokens_from_string(text)
+    if token_count > ADA_EMBEDDING_MAX_SIZE:
+        logger.debug(f"Truncating text from {token_count} tokens to {ADA_EMBEDDING_MAX_SIZE}")
+        # Use proper token-based truncation if available
+        if ENHANCED_MODE:
+            text = TokenCounter.truncate_to_tokens(text, ADA_EMBEDDING_MAX_SIZE)
+        else:
+            # Fallback: estimate ~4 chars per token
+            text = text[:ADA_EMBEDDING_MAX_SIZE * 4]
+
+    # Try to use cache if available
+    if ENHANCED_MODE:
+        cache_manager = get_cache_manager()
+        cached = cache_manager.embeddings.get(text)
+        if cached is not None:
+            logger.debug("Embedding cache hit")
+            return cached
+
+    # Get embedding from API
+    try:
+        response = openai.Embedding.create(
+            input=[text],
+            model="text-embedding-ada-002"
+        )
+        embedding = response["data"][0]["embedding"]
+
+        # Cache the result
+        if ENHANCED_MODE:
+            cache_manager.embeddings.set(text, embedding)
+
+        # Record metrics
+        if ENHANCED_MODE:
+            metrics = get_metrics()
+            metrics.record_api_call(
+                api_name="openai",
+                model="text-embedding-ada-002",
+                input_tokens=token_count,
+                success=True
+            )
+
+        return embedding
+
+    except openai.error.OpenAIError as e:
+        logger.error(f"OpenAI embedding API error: {e}")
+        raise
 
 
 def insert_doc_llama_index(index, doc_id, data, metadata={}, embedding=None):
